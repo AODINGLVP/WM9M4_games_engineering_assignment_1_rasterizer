@@ -55,15 +55,23 @@ public:
     // Returns the resulting matrix
     matrix operator * (const matrix& mx) const {
         matrix ret;
-        for (int row = 0; row < 4; ++row) {
+        __m128 rowVec1 = _mm_loadu_ps(&a[0]);
+        __m128 rowVec2 = _mm_loadu_ps(&a[4]);
+        __m128 rowVec3 = _mm_loadu_ps(&a[8]);
+        __m128 rowVec4 = _mm_loadu_ps(&a[12]);
+
+       
             for (int col = 0; col < 4; ++col) {
-                ret.a[row * 4 + col] =
-                    a[row * 4 + 0] * mx.a[0 * 4 + col] +
-                    a[row * 4 + 1] * mx.a[1 * 4 + col] +
-                    a[row * 4 + 2] * mx.a[2 * 4 + col] +
-                    a[row * 4 + 3] * mx.a[3 * 4 + col];
+				
+				__m128 colVec = _mm_set_ps(mx.a[3 * 4 + col], mx.a[2 * 4 + col], mx.a[1 * 4 + col], mx.a[0 * 4 + col]);
+
+				ret.a[0 *4+ col] = _mm_cvtss_f32(_mm_dp_ps(rowVec1, colVec, 0xF1));
+                ret.a[1 * 4 + col] = _mm_cvtss_f32(_mm_dp_ps(rowVec2, colVec, 0xF1));
+				ret.a[2 * 4 + col] = _mm_cvtss_f32(_mm_dp_ps(rowVec3, colVec, 0xF1));
+                ret.a[3 * 4 + col] = _mm_cvtss_f32(_mm_dp_ps(rowVec4, colVec, 0xF1));
+                    //a[row * 4 + 0] * mx.a[0 * 4 + col] +a[row * 4 + 1] * mx.a[1 * 4 + col] + a[row * 4 + 2] * mx.a[2 * 4 + col] +a[row * 4 + 3] * mx.a[3 * 4 + col];
             }
-        }
+        
         return ret;
     }
 
