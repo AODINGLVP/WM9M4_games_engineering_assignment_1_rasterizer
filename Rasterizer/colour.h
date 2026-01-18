@@ -2,15 +2,16 @@
 
 #include <cmath>
 #include <cstdint>
+#include <immintrin.h>
 
 // The `colour` class represents an RGB colour with floating-point precision.
 // It provides various utilities for manipulating and converting colours.
 class colour {
     union {
         struct {
-            float r, g, b; // Red, Green, and Blue components of the colour
+            float r, g, b,w; // Red, Green, and Blue components of the colour
         };
-        float rgb[3];     // Array representation of the RGB components
+        float rgb[4];     // Array representation of the RGB components
     };
 
 public:
@@ -23,7 +24,7 @@ public:
     // - _r: Red component (default 0.0f)
     // - _g: Green component (default 0.0f)
     // - _b: Blue component (default 0.0f)
-    colour(float _r = 0, float _g = 0, float _b = 0) : r(_r), g(_g), b(_b) {}
+    colour(float _r = 0, float _g = 0, float _b = 0) : r(_r), g(_g), b(_b),w(0) {}
 
     // Sets the RGB components of the colour.
     // Input Variables:
@@ -42,6 +43,7 @@ public:
     // Input Variables:
     // - c: The source color
     void operator = (colour c) {
+
         r = c.r;
         g = c.g;
         b = c.b;
@@ -71,6 +73,7 @@ public:
     // Returns a new `colour` object with scaled components.
     colour operator * (const float scalar) {
         colour c;
+		
         c.r = r * scalar;
         c.g = g * scalar;
         c.b = b * scalar;
@@ -82,7 +85,12 @@ public:
     // - col: The other color to multiply with
     // Returns a new `colour` object with multiplied components.
     colour operator * (const colour& col) {
+        //simd useless
         colour c;
+        /*__m128 rgb = _mm_loadu_ps(&r);
+        __m128 rgb2 = _mm_loadu_ps(&col.r);
+		__m128 result = _mm_mul_ps(rgb, rgb2);
+        _mm_storeu_ps(c.rgb, result);*/
         c.r = r * col.r;
         c.g = g * col.g;
         c.b = b * col.b;

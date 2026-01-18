@@ -92,51 +92,89 @@ public:
     T interpolate(float alpha, float beta, float gamma, T a1, T a2, T a3) {
         return (a1 * alpha) + (a2 * beta) + (a3 * gamma);
     }
-
+    static vec4 makeEdge(const vec4& a, const vec4& b) {
+        vec4 e(0,0,0,0);
+        e.x = a.y - b.y;
+        e.y = b.x - a.x;
+        e.z = a.x * b.y - a.y * b.x;
+        return e;
+    }
+    static  float evalEdge(const vec4& e, float x, float y) {
+        return e.x * x + e.y * y + e.z;
+    }
     // Draw the triangle on the canvas
     // Input Variables:
     // - renderer: Renderer object for drawing
     // - L: Light object for shading calculations
     // - ka, kd: Ambient and diffuse lighting coefficients
     void draw(Renderer& renderer, Light& L, float ka, float kd) {
-        vec2D minV, maxV;
+        int W = renderer.canvas.getWidth();
+        int H = renderer.canvas.getHeight();
 
-        // Get the screen-space bounds of the triangle
+        vec2D minV, maxV;
         getBoundsWindow(renderer.canvas, minV, maxV);
 
-        // Skip very small triangles
+        int minX = clamp((int)std::floor(minV.x), 0, W - 1);
+        int minY = clamp((int)std::floor(minV.y), 0, H - 1);
+        int maxX = clamp((int)std::ceil(maxV.x), 0, W - 1);
+        int maxY = clamp((int)std::ceil(maxV.y), 0, H - 1);
+
+                   
         if (area < 1.f) return;
+       
+        float invArea = 1.0f / area;
 
-        // Iterate over the bounding box and check each pixel
-        for (int y = (int)(minV.y); y < (int)ceil(maxV.y); y++) {
-            for (int x = (int)(minV.x); x < (int)ceil(maxV.x); x++) {
-                float alpha, beta, gamma;
+        vec4 e0 = makeEdge(v[1].p, v[2].p); // (A,B,C)
+        vec4 e1 = makeEdge(v[2].p, v[0].p);
+        vec4 e2 = makeEdge(v[0].p, v[1].p);
 
-                // Check if the pixel lies inside the triangle
-                if (getCoordinates(vec2D((float)x, (float)y), alpha, beta, gamma)) {
-                    // Interpolate color, depth, and normals
-                    colour c = interpolate(beta, gamma, alpha, v[0].rgb, v[1].rgb, v[2].rgb);
-                    c.clampColour();
-                    float depth = interpolate(beta, gamma, alpha, v[0].p[2], v[1].p[2], v[2].p[2]);
-                    vec4 normal = interpolate(beta, gamma, alpha, v[0].normal, v[1].normal, v[2].normal);
-                    normal.normalise();
+        float startX = (float)minX;
+        float startY = (float)minY;
 
-                    // Perform Z-buffer test and apply shading
+        float row_w0 = evalEdge(e0, startX, startY);
+        float row_w1 = evalEdge(e1, startX, startY);
+        float row_w2 = evalEdge(e2, startX, startY);
+
+        float w0_stepx = e0.x, w0_stepy = e0.y;
+        float w1_stepx = e1.x, w1_stepy = e1.y;
+        float w2_stepx = e2.x, w2_stepy = e2.y;
+        float alpha;
+        float beta ;
+        float gamma;
+        L.omega_i.normalise(); // 只做一次
+
+        for (int y = minY; y <= maxY; ++y) {
+            float w0 = row_w0, w1 = row_w1, w2 = row_w2;
+
+            for (int x = minX; x <= maxX; ++x) {
+                if (w0 >= 0.f && w1 >= 0.f && w2 >= 0.f) {
+                     alpha = w0 * invArea;
+                     beta = w1 * invArea;
+                     gamma = w2 * invArea;
+
+                    float depth = interpolate(alpha, beta, gamma, v[0].p[2], v[1].p[2], v[2].p[2]);
+
                     if (renderer.zbuffer(x, y) > depth && depth > 0.001f) {
-                        // typical shader begin
-                        L.omega_i.normalise();
+                        colour c = interpolate(alpha, beta, gamma, v[0].rgb, v[1].rgb, v[2].rgb);
+                        c.clampColour();
+                        vec4 normal = interpolate(alpha, beta, gamma, v[0].normal, v[1].normal, v[2].normal);
+                        normal.normalise();
+
                         float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
-                        colour a = (c * kd) * (L.L * dot) + (L.ambient * ka); // using kd instead of ka for ambient
-                        // typical shader end
+                        colour a = (c * kd) * (L.L * dot) + (L.ambient * ka);
+
                         unsigned char r, g, b;
                         a.toRGB(r, g, b);
                         renderer.canvas.draw(x, y, r, g, b);
                         renderer.zbuffer(x, y) = depth;
                     }
                 }
+                w0 += w0_stepx; w1 += w1_stepx; w2 += w2_stepx;
             }
+            row_w0 += w0_stepy; row_w1 += w1_stepy; row_w2 += w2_stepy;
         }
     }
+
 
     // Compute the 2D bounds of the triangle
     // Output Variables:
