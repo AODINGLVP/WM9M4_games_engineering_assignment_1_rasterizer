@@ -137,39 +137,94 @@ public:
 
         float w0_stepx = e0.x, w0_stepy = e0.y;
         float w1_stepx = e1.x, w1_stepy = e1.y;
-        float w2_stepx = e2.x, w2_stepy = e2.y;
+        float w2_stepx = e2.x , w2_stepy = e2.y;
+        float w0_block = e0.x * 8;      
+        float w1_block = e1.x * 8;
+        float w2_block = e2.x * 8;
         float alpha;
         float beta ;
         float gamma;
         L.omega_i.normalise(); // 只做一次
+        __m256 zero = _mm256_setzero_ps();
+        alignas(32)float w0[8] = { row_w0 ,row_w0 + w0_stepx * 1,row_w0 + w0_stepx * 2,row_w0 + w0_stepx * 3,row_w0 + w0_stepx * 4,row_w0 + w0_stepx * 5,row_w0 + w0_stepx * 6,row_w0 + w0_stepx * 7 };
+        alignas(32)float w1[8] = { row_w1 ,row_w1 + w1_stepx * 1,row_w1 + w1_stepx * 2,row_w1 + w1_stepx * 3,row_w1 + w1_stepx * 4,row_w1 + w1_stepx * 5,row_w1 + w1_stepx * 6,row_w1 + w1_stepx * 7 };
+        alignas(32) float w2[8] = { row_w2 ,row_w2 + w2_stepx * 1,row_w2 + w2_stepx * 2,row_w2 + w2_stepx * 3,row_w2 + w2_stepx * 4,row_w2 + w2_stepx * 5,row_w2 + w2_stepx * 6,row_w2 + w2_stepx * 7 };
+        
+
 
         for (int y = minY; y <= maxY; ++y) {
-            float w0 = row_w0, w1 = row_w1, w2 = row_w2;
+            for (int i = 0; i < 8; i++) {
+                w0[i] = row_w0 + w0_stepx * i;
+                w1[i] = row_w1 + w1_stepx * i;
+				w2[i] = row_w2 + w2_stepx * i;
+            }
 
-            for (int x = minX; x <= maxX; ++x) {
-                if (w0 >= 0.f && w1 >= 0.f && w2 >= 0.f) {
-                     alpha = w0 * invArea;
-                     beta = w1 * invArea;
-                     gamma = w2 * invArea;
+            
 
-                    float depth = interpolate(alpha, beta, gamma, v[0].p[2], v[1].p[2], v[2].p[2]);
+            __m256 w0_vec = _mm256_load_ps(w0);
+            __m256 w1_vec = _mm256_load_ps(w1);
+            __m256 w2_vec = _mm256_load_ps(w2);
+            __m256 w0_stepx_v = _mm256_set1_ps(w0_block);
+            __m256 w1_stepx_v = _mm256_set1_ps(w1_block);
+            __m256 w2_stepx_v = _mm256_set1_ps(w2_block);
 
-                    if (renderer.zbuffer(x, y) > depth && depth > 0.001f) {
-                        colour c = interpolate(alpha, beta, gamma, v[0].rgb, v[1].rgb, v[2].rgb);
-                        c.clampColour();
-                        vec4 normal = interpolate(alpha, beta, gamma, v[0].normal, v[1].normal, v[2].normal);
-                        normal.normalise();
 
-                        float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
-                        colour a = (c * kd) * (L.L * dot) + (L.ambient * ka);
 
-                        unsigned char r, g, b;
-                        a.toRGB(r, g, b);
-                        renderer.canvas.draw(x, y, r, g, b);
-                        renderer.zbuffer(x, y) = depth;
+           
+            for (int x = minX; x <= maxX; x+=8) {
+               
+               
+                __m256 m0 = _mm256_cmp_ps(w0_vec, zero, _CMP_GE_OQ);
+                __m256 m1 = _mm256_cmp_ps(w1_vec, zero, _CMP_GE_OQ);
+                __m256 m2 = _mm256_cmp_ps(w2_vec, zero, _CMP_GE_OQ);
+                __m256 inside = _mm256_and_ps(_mm256_and_ps(m0, m1), m2);
+                int mask = _mm256_movemask_ps(inside);
+                if (mask == 0) {
+                    w0_vec = _mm256_add_ps(w0_vec, w0_stepx_v);
+                    w1_vec = _mm256_add_ps(w1_vec, w1_stepx_v);
+                    w2_vec = _mm256_add_ps(w2_vec, w2_stepx_v);
+                    continue;
+                }
+
+                _mm256_store_ps(w0, w0_vec);
+				_mm256_store_ps(w1, w1_vec);
+                _mm256_store_ps(w2, w2_vec);
+                while (mask) {
+                    int i = _tzcnt_u32(mask);
+                    mask &= (mask - 1);
+                    
+
+                   
+                    if (w0[i] >= 0.f && w1[i] >= 0.f && w2[i] >= 0.f) {
+
+                        alpha = w0[i] * invArea;
+                        beta = w1[i] * invArea;
+                        gamma = w2[i] * invArea;
+
+                        float depth = interpolate(alpha, beta, gamma, v[0].p[2], v[1].p[2], v[2].p[2]);
+
+                        if (renderer.zbuffer(x+i, y) > depth && depth > 0.001f) {
+                            colour c = interpolate(alpha, beta, gamma, v[0].rgb, v[1].rgb, v[2].rgb);
+                            c.clampColour();
+                            vec4 normal = interpolate(alpha, beta, gamma, v[0].normal, v[1].normal, v[2].normal);
+                            normal.normalise();
+
+                            float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
+                            colour a = (c * kd) * (L.L * dot) + (L.ambient * ka);
+
+                            unsigned char r, g, b;
+                            a.toRGB(r, g, b);
+                            renderer.canvas.draw(x+i, y, r, g, b);
+                            renderer.zbuffer(x+i, y) = depth;
+                        }
                     }
                 }
-                w0 += w0_stepx; w1 += w1_stepx; w2 += w2_stepx;
+					w0_vec = _mm256_add_ps(w0_vec, w0_stepx_v);
+					w1_vec = _mm256_add_ps(w1_vec, w1_stepx_v);
+					w2_vec = _mm256_add_ps(w2_vec, w2_stepx_v);
+                    
+                
+                
             }
             row_w0 += w0_stepy; row_w1 += w1_stepy; row_w2 += w2_stepy;
         }
