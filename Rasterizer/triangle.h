@@ -186,8 +186,6 @@ public:
 				w2[i] = row_w2 + w2_stepx * i;
             }
 
-            
-
             __m256 w0_vec = _mm256_load_ps(w0);
             __m256 w1_vec = _mm256_load_ps(w1);
             __m256 w2_vec = _mm256_load_ps(w2);
@@ -218,9 +216,7 @@ public:
                     continue;
                 }
 
-                _mm256_store_ps(w0, w0_vec);
-				_mm256_store_ps(w1, w1_vec);
-                _mm256_store_ps(w2, w2_vec);
+               
                 while (mask) {
                     int i = _tzcnt_u32(mask);
                     mask &= (mask - 1);
@@ -229,30 +225,18 @@ public:
                    
                    
 
-                        //alpha = w0[i] * invArea;
-                        //beta = w1[i] * invArea;
-                        //gamma = w2[i] * invArea;
+                     
                         float depth = z+ dzdx * i;
-                        //float depth = interpolate(alpha, beta, gamma, v[0].p[2], v[1].p[2], v[2].p[2]);
+                      
 
                         if (renderer.zbuffer(x+i, y) > depth && depth > 0.001f) {
-                            //colour c = interpolate(alpha, beta, gamma, v[0].rgb, v[1].rgb, v[2].rgb);
+                         
                             colour c = col + dcdx * i;
                             c.clampColour();
-                           //vec4 normal1 = interpolate(alpha, beta, gamma, v[0].normal, v[1].normal, v[2].normal);
-                          
-						  
 							vec4 normal = nor+ dndx * i;
-                            //if ((normal.x - normal1.x) > 0.1) {
-                              //  std::cout << "error normal   " << normal.x << "   the right    " << normal1.x << "   x   " << x << "   y   " << y << "   i   " << i << std::endl;
-                           // }
-                           // normal1.normalise();
                             normal.normalise();
-                          
-
                             float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
                             colour a = (c * kd) * (L.L * dot) + (L.ambient * ka);
-
                             unsigned char r, g, b;
                             a.toRGB(r, g, b);
                             renderer.canvas.draw(x+i, y, r, g, b);
@@ -267,7 +251,33 @@ public:
                     col = col + dcdx * 8;
                     nor = nor + dndx * 8;
                     
-                
+                    if (maxX - x < 8) {
+                        _mm256_store_ps(w0, w0_vec);
+                        _mm256_store_ps(w1, w1_vec);
+                        _mm256_store_ps(w2, w2_vec);
+                        for (int i = 0; i <= maxX-x; i++) {
+                            if (w0[i] >=0 && w1[i] >= 0 && w2[i] >= 0) {
+                                float depth = z + dzdx * i;
+                            
+
+                                if (renderer.zbuffer(x + i, y) > depth && depth > 0.001f) {
+                                    
+                                    colour c = col + dcdx * i;
+                                    c.clampColour();
+                                    vec4 normal = nor + dndx * i;
+                                    normal.normalise();
+                                    float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
+                                    colour a = (c * kd) * (L.L * dot) + (L.ambient * ka);
+                                    unsigned char r, g, b;
+                                    a.toRGB(r, g, b);
+                                    renderer.canvas.draw(x + i, y, r, g, b);
+                                    renderer.zbuffer(x + i, y) = depth;
+                                }
+                            }
+                        }
+                        break;
+
+                }
                 
             }
             row_w0 += w0_stepy; row_w1 += w1_stepy; row_w2 += w2_stepy;
