@@ -117,15 +117,11 @@ public:
 
 
         if (area < 1.f) return;
-        float area2 = (v[1].p.x - v[0].p.x) * (v[2].p.y - v[0].p.y) - (v[1].p.y - v[0].p.y) * (v[2].p.x - v[0].p.x);
-        if (area2 < 0.0f) {
-            //std::swap(v[1], v[2]);
-            area2 = -area2;
-        }
+       
 
 
-        float invArea = 1.0f / area2;
-        float invArea2 = 1.0f / area2;
+        float invArea = 1.0f / area;
+      
 
         int W = renderer.canvas.getWidth();
         int H = renderer.canvas.getHeight();
@@ -168,6 +164,7 @@ public:
         float alpha0 = row_w0 * invArea;
         float beta0 = row_w1 * invArea;
         float gamma0 = row_w2 * invArea;
+		//std::cout << "asdasdds"<< alpha0+ beta0 + gamma0 <<std::endl;
         float z_row = v[0].p.z * alpha0 + v[1].p.z * beta0 + v[2].p.z * gamma0;
         colour c_row = v[0].rgb * alpha0 + v[1].rgb * beta0 + v[2].rgb * gamma0;
         vec4 n_row = v[0].normal * alpha0 + v[1].normal * beta0 + v[2].normal * gamma0;
@@ -215,6 +212,9 @@ public:
                     w0_vec = _mm256_add_ps(w0_vec, w0_stepx_v);
                     w1_vec = _mm256_add_ps(w1_vec, w1_stepx_v);
                     w2_vec = _mm256_add_ps(w2_vec, w2_stepx_v);
+                    z += dzdx * 8;
+                    col = col + dcdx * 8;
+                    nor = nor + dndx * 8;
                     continue;
                 }
 
@@ -239,9 +239,16 @@ public:
                             //colour c = interpolate(alpha, beta, gamma, v[0].rgb, v[1].rgb, v[2].rgb);
                             colour c = col + dcdx * i;
                             c.clampColour();
-                          // vec4 normal = interpolate(alpha, beta, gamma, v[0].normal, v[1].normal, v[2].normal);
+                           //vec4 normal1 = interpolate(alpha, beta, gamma, v[0].normal, v[1].normal, v[2].normal);
+                          
+						  
 							vec4 normal = nor+ dndx * i;
+                            //if ((normal.x - normal1.x) > 0.1) {
+                              //  std::cout << "error normal   " << normal.x << "   the right    " << normal1.x << "   x   " << x << "   y   " << y << "   i   " << i << std::endl;
+                           // }
+                           // normal1.normalise();
                             normal.normalise();
+                          
 
                             float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
                             colour a = (c * kd) * (L.L * dot) + (L.ambient * ka);
