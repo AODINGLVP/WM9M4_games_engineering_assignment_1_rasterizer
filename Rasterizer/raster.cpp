@@ -224,6 +224,7 @@ void scene2() {
     int cycle = 0;
 
     bool running = true;
+    //bool show = 0;
     while (running) {
         renderer.canvas.checkInput();
         renderer.clear();

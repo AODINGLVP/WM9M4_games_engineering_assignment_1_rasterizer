@@ -7,6 +7,7 @@
 
 template<std::floating_point T> // Restricts T to be a floating-point type
 class Zbuffer {
+public:
     T* buffer;                  // Pointer to the buffer storing depth values - can also use unique_ptr []here
     unsigned int width, height; // Dimensions of the Z-buffer
 
