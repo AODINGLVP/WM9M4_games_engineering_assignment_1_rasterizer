@@ -176,22 +176,34 @@ public:
         alignas(32)float w0[8] = { row_w0 ,row_w0 + w0_stepx * 1,row_w0 + w0_stepx * 2,row_w0 + w0_stepx * 3,row_w0 + w0_stepx * 4,row_w0 + w0_stepx * 5,row_w0 + w0_stepx * 6,row_w0 + w0_stepx * 7 };
         alignas(32)float w1[8] = { row_w1 ,row_w1 + w1_stepx * 1,row_w1 + w1_stepx * 2,row_w1 + w1_stepx * 3,row_w1 + w1_stepx * 4,row_w1 + w1_stepx * 5,row_w1 + w1_stepx * 6,row_w1 + w1_stepx * 7 };
         alignas(32) float w2[8] = { row_w2 ,row_w2 + w2_stepx * 1,row_w2 + w2_stepx * 2,row_w2 + w2_stepx * 3,row_w2 + w2_stepx * 4,row_w2 + w2_stepx * 5,row_w2 + w2_stepx * 6,row_w2 + w2_stepx * 7 };
-        
+
+
+        alignas(32)float w0_step_vx[8] = { 0 ,  w0_stepx * 1, + w0_stepx * 2, + w0_stepx * 3, + w0_stepx * 4, + w0_stepx * 5, + w0_stepx * 6, + w0_stepx * 7 };
+        alignas(32)float w1_step_vx[8] = { 0 ,  w1_stepx * 1, + w1_stepx * 2, + w1_stepx * 3, + w1_stepx * 4, + w1_stepx * 5, + w1_stepx * 6, + w1_stepx * 7 };
+        alignas(32) float w2_step_vx[8] = { 0 ,  w2_stepx * 1, + w2_stepx * 2, + w2_stepx * 3, + w2_stepx * 4, + w2_stepx * 5, + w2_stepx * 6, + w2_stepx * 7 };
+        __m256 w0_step_vx_256 = _mm256_load_ps(w0_step_vx);
+        __m256 w1_step_vx_256 = _mm256_load_ps(w1_step_vx);
+        __m256 w2_step_vx_256 = _mm256_load_ps(w2_step_vx);
+
+
+
+
+
         int zrow;
+        __m256 w0_stepx_v = _mm256_set1_ps(w0_block);
+        __m256 w1_stepx_v = _mm256_set1_ps(w1_block);
+        __m256 w2_stepx_v = _mm256_set1_ps(w2_block);
+
 
         for (int y = minY; y <= maxY; ++y) {
-            for (int i = 0; i < 8; i++) {
-                w0[i] = row_w0 + w0_stepx * i;
-                w1[i] = row_w1 + w1_stepx * i;
-				w2[i] = row_w2 + w2_stepx * i;
-            }
-
-            __m256 w0_vec = _mm256_load_ps(w0);
-            __m256 w1_vec = _mm256_load_ps(w1);
-            __m256 w2_vec = _mm256_load_ps(w2);
-            __m256 w0_stepx_v = _mm256_set1_ps(w0_block);
-            __m256 w1_stepx_v = _mm256_set1_ps(w1_block);
-            __m256 w2_stepx_v = _mm256_set1_ps(w2_block);
+           
+            __m256 w0_vec = _mm256_set1_ps(row_w0);
+            __m256 w1_vec = _mm256_set1_ps(row_w1);
+            __m256 w2_vec = _mm256_set1_ps(row_w2);
+            w0_vec = _mm256_add_ps(w0_vec, w0_step_vx_256);
+             w1_vec = _mm256_add_ps(w1_vec, w1_step_vx_256);
+             w2_vec = _mm256_add_ps(w2_vec, w2_step_vx_256);
+            
 
 			
             colour col = c_row;
