@@ -233,11 +233,6 @@ public:
                     int i = _tzcnt_u32(mask);
                     mask &= (mask - 1);
                     
-
-                   
-                   
-
-                     
                         float depth = z+ dzdx * i;
                       
 
@@ -267,7 +262,7 @@ public:
                         _mm256_store_ps(w0, w0_vec);
                         _mm256_store_ps(w1, w1_vec);
                         _mm256_store_ps(w2, w2_vec);
-                        for (int i = 0; i <= maxX-x; i++) {
+                        for (int i = 0; i <maxX-x; i++) {
                             if (w0[i] >=0 && w1[i] >= 0 && w2[i] >= 0) {
                                 float depth = z + dzdx * i;
                             
