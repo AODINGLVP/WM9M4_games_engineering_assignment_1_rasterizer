@@ -513,6 +513,29 @@ namespace GamesEngineeringBase
 			image[index + 1] = g;
 			image[index + 2] = b;
 		}
+		
+		// Draws maby aos
+		void draw(int x, int y, float r[8], float g[8], float b[8])
+		{
+			int index = ((y * width) + x) * 3;
+
+			for(int i=0; i < 8; i++)
+			{
+				image[index+i*3] = static_cast<unsigned char>(r[i]) ;
+				
+			}
+			for (int i = 0; i < 8; i++)
+			{
+				image[index + i * 3+1] = static_cast<unsigned char>(g[i]);
+
+			}
+			for (int i = 0; i < 8; i++)
+			{
+				image[index + i * 3 + 2] = static_cast<unsigned char>( b[i]);
+
+			}
+			
+		}
 
 		// Draws a pixel at the specified pixel index with the given RGB color
 		void draw(int pixelIndex, unsigned char r, unsigned char g, unsigned char b)
