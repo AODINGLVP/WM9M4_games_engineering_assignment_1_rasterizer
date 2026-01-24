@@ -67,6 +67,7 @@ void render(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L,MultilThrea
 
 // Test scene function to demonstrate rendering with user-controlled transformations
 // No input variables
+/*
 void sceneTest() {
     Renderer renderer;
     // create light source {direction, diffuse intensity, ambient intensity}
@@ -333,11 +334,11 @@ void scene3() {
         delete m;
 }
 
-
+*/
 
 
 void multil_scene3() {
-    Renderer renderer;
+   Renderer::instance();
     matrix camera = matrix::makeIdentity();
     Light L{ vec4(0.f, 1.f, 1.f, 0.f), colour(1.0f, 1.0f, 1.0f), colour(0.2f, 0.2f, 0.2f) };
 
@@ -375,14 +376,14 @@ void multil_scene3() {
 
     bool running = true;
 	MultilThreadControl *scv = new MultilThreadControl();
-    scv->start();
+    scv->start(4);
 	int tilenumber = 8;
     //bool show = 0;
     while (running) {
         scv->massion_downe = false;
 		scv->produce_done = false;
-        renderer.canvas.checkInput();
-        renderer.clear();
+        Renderer::instance().canvas.checkInput();
+        Renderer::instance().clear();
 
         // Rotate each cube in the grid
         for (unsigned int i = 0; i < rotations.size(); i++)
@@ -400,19 +401,18 @@ void multil_scene3() {
             }
         }
 
-        if (renderer.canvas.keyPressed(VK_ESCAPE)) break;
+        if (Renderer::instance().canvas.keyPressed(VK_ESCAPE)) break;
 		scv->setTileCount(tilenumber);
         //scv->tiles.reserve(tilenumber);
 		//scv->tiles.resize(tilenumber);
         for (int i = 0; i < tilenumber; i++) {
 			//scv->tiles.push_back(SPSCQueue());
-            scv->tiles[i].head.store(0, std::memory_order_relaxed);
-            scv->tiles[i].tail.store(0, std::memory_order_relaxed);
+			scv->tiles[i].taskQueue = std::queue<TileWork>();
             scv->tiles[i].owner.store(-1, std::memory_order_relaxed);
 			scv->numThreads = 8;
         }
         for (auto& m : scene)
-            render(renderer, m, camera, L,scv,tilenumber);
+            render(Renderer::instance(), m, camera, L,scv,tilenumber);
 
         scv->produce_done = true;
         while (!scv->massion_downe) {
@@ -420,7 +420,7 @@ void multil_scene3() {
 			//scv->tiles.clear();
         }
       
-            renderer.present();
+        Renderer::instance().present();
           
 	
     }

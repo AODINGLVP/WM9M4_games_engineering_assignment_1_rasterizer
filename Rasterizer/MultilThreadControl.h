@@ -6,7 +6,9 @@
 #include "colour.h"
 #include "renderer.h"
 #include "light.h"
-
+#include <mutex>
+#include <atomic>
+#include <queue>
 struct alignas(64) TileFlag {
 	std::atomic<bool> free;
 };
@@ -46,39 +48,31 @@ class SPSCQueue {
 public:
 	int sizeN = 1024;
 	std::atomic<int> owner = -1;
-	alignas(64) std::atomic<size_t> head{ 0 }; // consumer owns writes
-	alignas(64) std::atomic<size_t> tail{ 0 }; // producer owns writes
-	alignas(64) TileWork buf[1024];
+    std::queue<TileWork> taskQueue;
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool stop = false;
 	//bool is_empty = false;
 
     bool try_push(const TileWork& v) {
-        size_t t = tail.load(std::memory_order_relaxed);
-        size_t next = (t + 1) & (sizeN - 1);
-        if (next == head.load(std::memory_order_acquire)) return false;
-
-        buf[t] = v; // ¿½±´
-        tail.store(next, std::memory_order_release);
+        std::lock_guard<std::mutex> lock(mtx);
+        taskQueue.push(v);
         return true;
     }
 
    
 
     bool try_pop(TileWork& out) {
-        size_t h = head.load(std::memory_order_relaxed);
-        if (h == tail.load(std::memory_order_acquire)) return false;
-
-        out = std::move(buf[h]);
-        head.store((h + 1) & (sizeN - 1), std::memory_order_release);
-        return true;
+        std::lock_guard<std::mutex> lock(mtx);
+        if (taskQueue.empty()) {
+            return false; // Queue is empty
+		}
+        out = taskQueue.front();
+        taskQueue.pop();
+		return true;
     }
-	bool empty() const {
-		size_t h = head.load(std::memory_order_relaxed);
-		if (h == tail.load(std::memory_order_acquire)) return true; // ¿Õ
-		return false;
-	}
-	int getsize() {
-		return (tail.load(std::memory_order_relaxed) - head.load(std::memory_order_acquire) + sizeN) & (sizeN - 1);
-	}
+	
+	
 };
 
 
@@ -142,14 +136,14 @@ private:
                         tiles[i].owner.store(-1, std::memory_order_release);
 						active_workers--;
 
-						break;
+						//break;
 					}
 				}
 			
 				if (produce_done && active_workers == 0) {
 					bool all_empty = true;
 					for (int i = 0; i < tile_count; i++) {
-						if (!tiles[i].empty()) {
+						if (!tiles[i].taskQueue.empty()) {
 							all_empty = false;
 						}
 					}
@@ -271,7 +265,7 @@ private:
                     continue;
                 }
 
-                __m256 zbuffer_v = _mm256_loadu_ps(&renderer.zbuffer(x, y));
+                __m256 zbuffer_v = _mm256_loadu_ps(&Renderer::instance().zbuffer(x, y));
                 __m256 m0_depth = _mm256_cmp_ps(depth_v, zeor_dot_oneoneone, _CMP_GE_OQ);
                 __m256 m1_depth = _mm256_cmp_ps(zbuffer_v, depth_v, _CMP_GE_OQ);
                 __m256 inside_depth = _mm256_and_ps(m0_depth, m1_depth);
@@ -346,9 +340,9 @@ private:
                         _mm256_store_ps(a_b, a_vb);
 
 
-                        renderer.canvas.draw(x, y, a_r, a_g, a_b);
+                        Renderer::instance().canvas.draw(x, y, a_r, a_g, a_b);
 
-                        _mm256_store_ps(&renderer.zbuffer(x, y), depth_v);
+                        _mm256_store_ps(&Renderer::instance().zbuffer(x, y), depth_v);
 
                     }
                     else {
@@ -377,8 +371,8 @@ private:
                             b = a_b[i];
                             depth_end = depth_8f[i];
 
-                            renderer.canvas.draw(x + i, y, r, g, b);
-                            renderer.zbuffer(x + i, y) = depth_end;
+                            Renderer::instance().canvas.draw(x + i, y, r, g, b);
+                            Renderer::instance().zbuffer(x + i, y) = depth_end;
 
 
                         }
@@ -421,7 +415,7 @@ private:
                         break;
                     }
 
-                    __m256 zbuffer_v = _mm256_loadu_ps(&renderer.zbuffer(x, y));
+                    __m256 zbuffer_v = _mm256_loadu_ps(&Renderer::instance().zbuffer(x, y));
                     __m256 m0_depth = _mm256_cmp_ps(depth_v, zeor_dot_oneoneone, _CMP_GE_OQ);
                     __m256 m1_depth = _mm256_cmp_ps(zbuffer_v, depth_v, _CMP_GE_OQ);
                     __m256 inside_depth = _mm256_and_ps(m0_depth, m1_depth);
@@ -470,8 +464,8 @@ private:
                         b = a_b[i] * 255;
                         depth_end = depth_8f[i];
 
-                        renderer.canvas.draw(x + i, y, r, g, b);
-                        renderer.zbuffer(x + i, y) = depth_end;
+                        Renderer::instance().canvas.draw(x + i, y, r, g, b);
+                        Renderer::instance().zbuffer(x + i, y) = depth_end;
 
                     }
 

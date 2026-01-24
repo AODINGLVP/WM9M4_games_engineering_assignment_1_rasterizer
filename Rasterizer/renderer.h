@@ -16,13 +16,12 @@ public:
     Zbuffer<float> zbuffer;                  // Z-buffer for depth management
     GamesEngineeringBase::Window canvas;     // Canvas for rendering the scene
     matrix perspective;                      // Perspective projection matrix
-
-    // Constructor initializes the canvas, Z-buffer, and perspective projection matrix.
-    Renderer() {
-        canvas.create(1024, 768, "Raster");  // Create a canvas with specified dimensions and title
-        zbuffer.create(1024, 768);           // Initialize the Z-buffer with the same dimensions
-        perspective = matrix::makePerspective(fov, aspect, n, f); // Set up the perspective matrix
+    static Renderer& instance() {
+        static Renderer inst;   // C++11 起：线程安全初始化
+        return inst;
     }
+    // Constructor initializes the canvas, Z-buffer, and perspective projection matrix.
+  
 
     // Clears the canvas and resets the Z-buffer.
     void clear() {
@@ -34,4 +33,12 @@ public:
     void present() {
         canvas.present(); // Display the rendered frame
     }
+private:
+    Renderer() {
+        canvas.create(1024, 768, "Raster");  // Create a canvas with specified dimensions and title
+        zbuffer.create(1024, 768);           // Initialize the Z-buffer with the same dimensions
+        perspective = matrix::makePerspective(fov, aspect, n, f); // Set up the perspective matrix
+    }
+    Renderer(const Renderer&) = delete;
+    Renderer& operator=(const Renderer&) = delete;
 };

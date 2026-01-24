@@ -120,11 +120,11 @@ public:
         float invArea = 1.0f / area;
       
 
-        int W = renderer.canvas.getWidth();
-        int H = renderer.canvas.getHeight();
+        int W = Renderer::instance().canvas.getWidth();
+        int H = Renderer::instance().canvas.getHeight();
 
         vec2D minV, maxV;
-        getBoundsWindow(renderer.canvas, minV, maxV);
+        getBoundsWindow(Renderer::instance().canvas, minV, maxV);
 
         int minX = clamp((int)std::floor(minV.x), 0, W - 1);
         int minY = clamp((int)std::floor(minV.y), 0, H - 1);
@@ -309,7 +309,7 @@ public:
 
         work.ka = ka;
         work.kd = kd;
-        work.renderer = &renderer;
+        work.renderer = &Renderer::instance();
         work.light = L;
 
         for (int i = 0; i < tilenumber; i++) {
@@ -329,7 +329,7 @@ public:
             work.maxX = std::min(maxX,1024);
             work.minY = std::max(miny, 0);;
             work.maxY = std::min(maxy, 768);;
-			work.renderer = &renderer;
+			work.renderer = &Renderer::instance();
             work.ydifferent = ydifferent;
             scv->tiles[i].try_push(work);
 
