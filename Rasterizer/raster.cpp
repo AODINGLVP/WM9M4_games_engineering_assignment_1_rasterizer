@@ -376,23 +376,24 @@ void multil_scene3() {
 
     bool running = true;
 	MultilThreadControl *scv = new MultilThreadControl();
-    scv->start(10);
-	int tilenumber = 10;
+   
+	
+    int all_number = 10;
     std::jthread for_produce;
 	double fenfa_count_time = 0.0;
 	double chule_count_time = 0.0;
 	double qianqian_time = 0.0;
     //bool show = 0;
-
+    scv->start(all_number);
 
 
 
     while (running) {
 
 
-        scv->one_done = false;
+       
 		scv->produce_done = false;
-		scv->active_workers = 10;
+		scv->active_workers = all_number;
         auto star3 = std::chrono::high_resolution_clock::now();
         Renderer::instance().canvas.checkInput();
         Renderer::instance().clear();
@@ -428,13 +429,13 @@ void multil_scene3() {
         }
 
         if (Renderer::instance().canvas.keyPressed(VK_ESCAPE)) break;
-		scv->setTileCount(tilenumber);
+		scv->setTileCount(all_number);
       
-        for (int i = 0; i < tilenumber; i++) {
+        for (int i = 0; i < all_number; i++) {
 			//scv->tiles.push_back(SPSCQueue());
 			scv->tiles[i].taskQueue = std::queue<TileWork>();
           
-			scv->numThreads = 10;
+			scv->numThreads = all_number;
         }
       
        
@@ -453,7 +454,7 @@ void multil_scene3() {
 
         auto star1 = std::chrono::high_resolution_clock::now();
         for (auto& m : scene) {
-            render(Renderer::instance(), m, camera, L, scv, tilenumber);
+            render(Renderer::instance(), m, camera, L, scv, all_number);
             
         }
         auto end1 = std::chrono::high_resolution_clock::now();
@@ -477,7 +478,7 @@ void multil_scene3() {
 
         auto star2 = std::chrono::high_resolution_clock::now();
         int tilessizenumber = 0;
-        for (int i = 0; i < tilenumber; i++) {
+        for (int i = 0; i < all_number; i++) {
 
             tilessizenumber += scv->tiles[i].taskQueue.size();
         }
