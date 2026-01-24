@@ -376,8 +376,8 @@ void multil_scene3() {
 
     bool running = true;
 	MultilThreadControl *scv = new MultilThreadControl();
-    scv->start(6);
-	int tilenumber = 16;
+    scv->start(10);
+	int tilenumber = 10;
     std::jthread for_produce;
 	double fenfa_count_time = 0.0;
 	double chule_count_time = 0.0;
@@ -390,8 +390,9 @@ void multil_scene3() {
     while (running) {
 
 
-
-
+        scv->one_done = false;
+		scv->produce_done = false;
+		scv->active_workers = 10;
         auto star3 = std::chrono::high_resolution_clock::now();
         Renderer::instance().canvas.checkInput();
         Renderer::instance().clear();
@@ -433,7 +434,7 @@ void multil_scene3() {
 			//scv->tiles.push_back(SPSCQueue());
 			scv->tiles[i].taskQueue = std::queue<TileWork>();
           
-			scv->numThreads = 6;
+			scv->numThreads = 10;
         }
       
        
@@ -457,7 +458,9 @@ void multil_scene3() {
         }
         auto end1 = std::chrono::high_resolution_clock::now();
 		fenfa_count_time += std::chrono::duration<double, std::milli>(end1 - star1).count();
-        scv->produce_done = true;
+		
+		//scv->stop = false;
+        //scv->produce_done = true;
 
         //scv->start();
 
@@ -479,27 +482,21 @@ void multil_scene3() {
             tilessizenumber += scv->tiles[i].taskQueue.size();
         }
        
+        for (int i = 0; i < 10; i++) {
+			scv->massion_owner[i] = i;
+        }
+		scv->produce_done = true;
+        scv->stop_flag = scv->stop_flag + 1;
+        scv->stop_flag.notify_all();
         //cout << "tile size number:" << tilessizenumber << endl;
+
+
+
         while (1) {
-            for (int i = 0; i < tilenumber; i++) {
-                if (!scv->tiles[i].taskQueue.empty()) {
-                    for (int j = 0; j < scv->massion_owner.size(); j++) {
-                        if (scv->massion_owner[j] == -1) {
-                            scv->massion_owner[j] = i;
-
-                        }
-                    }
-                }
-
+            if ( scv->active_workers == 0) {
+                break;
             }
-			bool tiles_empty_count = true;
-            for(int i=0;i<tilenumber;i++){
-                if (!scv->tiles[i].taskQueue.empty()) {
-                    tiles_empty_count = false;
-                   
-                }
-			}
-			if (tiles_empty_count && scv->active_workers == 0) break;
+			
         }
         
      

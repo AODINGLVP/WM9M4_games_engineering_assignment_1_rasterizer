@@ -80,8 +80,9 @@ public:
 class MultilThreadControl
 {
 	public:
-		std::mutex empty_check_mtx;
-       
+        std::atomic<int> stop_flag = 0;
+		std::mutex tex;
+		std::atomic<bool> one_done = false;
 		std::atomic<int>active_workers=0;
         std::map<int,int>massion_owner;
        // A* a = new A[size];
@@ -90,7 +91,7 @@ class MultilThreadControl
         //SPSCQueue tiles[32];
 		int tile_count = 8;
 		//std::vector<TileFlag>is_freetile;
-		bool produce_done = false;
+		std::atomic<bool> produce_done = false;
 	static const int MAX_THREADS = 10;
 	 int numThreads=0;
 	std::vector<std::jthread> scv;
@@ -122,10 +123,15 @@ private:
 		
 		while (true)
 		{
+            int my_epoch = stop_flag.load(std::memory_order_acquire);
+            stop_flag.wait(my_epoch);
+            if (!produce_done) {
+                continue;
+            } 
+            
            
-         
             if (massion_owner[tid] != -1) {
-				active_workers++;
+               
                 while (tiles[massion_owner[tid]].try_pop(mission)) {
                     tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
                         mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
@@ -137,8 +143,18 @@ private:
                         mission.w0_stepy, mission.w1_stepy, mission.w2_stepy, mission.dzdy, mission.dcdy, mission.dndy,
                         mission.ka, mission.kd, mission.light);
 				}
-                massion_owner[tid] = -1;
-                active_workers--;
+
+                {
+					//tex.lock();
+                    
+                    massion_owner[tid] = -1;
+                    active_workers--;
+					//bool stop_check = stop;
+                  
+
+                   
+                }
+				
             }
                             
 			
