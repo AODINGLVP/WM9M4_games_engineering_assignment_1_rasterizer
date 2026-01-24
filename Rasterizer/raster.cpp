@@ -377,7 +377,7 @@ void multil_scene3() {
     bool running = true;
 	MultilThreadControl *scv = new MultilThreadControl();
     scv->start(6);
-	int tilenumber = 16;
+	int tilenumber = 8;
     std::jthread for_produce;
 	double fenfa_count_time = 0.0;
 	double chule_count_time = 0.0;
@@ -458,7 +458,10 @@ void multil_scene3() {
         auto end1 = std::chrono::high_resolution_clock::now();
 		fenfa_count_time += std::chrono::duration<double, std::milli>(end1 - star1).count();
         scv->produce_done = true;
-
+        scv->all_work_end = false;
+		scv->now_tile = 123;
+        scv->now_tile.notify_all();
+        
         //scv->start();
 
 
@@ -473,37 +476,43 @@ void multil_scene3() {
 
 
         auto star2 = std::chrono::high_resolution_clock::now();
-        int tilessizenumber = 0;
-        for (int i = 0; i < tilenumber; i++) {
-
-            tilessizenumber += scv->tiles[i].taskQueue.size();
-        }
-       
-        //cout << "tile size number:" << tilessizenumber << endl;
+        int local_tilesnumber=tilenumber;
         while (1) {
-            for (int i = 0; i < tilenumber; i++) {
-                if (!scv->tiles[i].taskQueue.empty()) {
-                    for (int j = 0; j < scv->massion_owner.size(); j++) {
-                        if (scv->massion_owner[j] == -1) {
-                            scv->massion_owner[j] = i;
+            for (int i = 0; i < scv->numThreads; i++) {
+                if (local_tilesnumber <= 0)
+                    break;
 
-                        }
-                    }
-                }
-
-            }
+                scv->massion_owner[i].push_back(tilenumber- local_tilesnumber);
+                local_tilesnumber--;
+            }if(local_tilesnumber<=0)
+				break;
+        }
+        
+        while (1) {
+            
+            int tiles_number = 0;
 			bool tiles_empty_count = true;
-            for(int i=0;i<tilenumber;i++){
-                if (!scv->tiles[i].taskQueue.empty()) {
+            for(int i=0;i<scv->massion_owner.size();i++){
+                if (!scv->massion_owner[i].empty()) {
+
                     tiles_empty_count = false;
+                    tiles_number++;
                    
                 }
+				
 			}
-			if (tiles_empty_count && scv->active_workers == 0) break;
+            if (tiles_empty_count) {
+				break;
+            }
+            //scv->now_tile = tiles_number;
+           // scv->is_down.notify_all();
+			if (tiles_empty_count) 
+                break;
         }
         
      
-        //scv->stop_workers();
+		//scv->all_work_end = true;
+		//scv->is_down.notify_all();
         Renderer::instance().present();
         auto end2 = std::chrono::high_resolution_clock::now();
         chule_count_time += std::chrono::duration<double, std::milli>(end2 - star2).count();

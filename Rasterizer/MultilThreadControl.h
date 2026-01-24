@@ -1,4 +1,5 @@
 #pragma once
+#include <iostream>
 #include <thread>
 #include <vector>
 #include <functional>
@@ -46,6 +47,7 @@ struct alignas(32) TileWork {
 
 class SPSCQueue {
 public:
+    bool is_working = false;
 	int sizeN = 1024;
 	std::atomic<int> owner = -1;
     std::queue<TileWork> taskQueue;
@@ -80,15 +82,16 @@ public:
 class MultilThreadControl
 {
 	public:
+		std::mutex mtx;
 		std::mutex empty_check_mtx;
-       
+        std::atomic<bool> is_down{false};
 		std::atomic<int>active_workers=0;
-        std::map<int,int>massion_owner;
-       // A* a = new A[size];
+        std::map<int,std::vector<int>>massion_owner;
+        bool all_work_end = false;
 		SPSCQueue* tiles = new SPSCQueue[32];
-        //vector<SPSCQueue> tiles;
-        //SPSCQueue tiles[32];
+        
 		int tile_count = 8;
+		std::atomic<int> now_tile = 8;
 		//std::vector<TileFlag>is_freetile;
 		bool produce_done = false;
 	static const int MAX_THREADS = 10;
@@ -98,11 +101,12 @@ class MultilThreadControl
 		
 	}
 	void start(int n=10) {
+		
         numThreads=n;
 		scv.reserve(n);
 		for (int i = 0; i < n; i++)
 		{
-			massion_owner[i] = -1;
+			//massion_owner[i] = -1;
             scv.emplace_back(&MultilThreadControl::worker, this, i);
 			//scv[i] = std::jthread(&MultilThreadControl::worker, this, i);
 		}
@@ -111,35 +115,56 @@ class MultilThreadControl
   
 	void setTileCount(int n) {
         tile_count = n;
+		now_tile = n;
 	}
 	
 	
 
 private:
-	void worker(int tid) {
+	void worker(const int tid) {
 		TileWork mission;
 		
 		
 		while (true)
-		{
-           
-         
-            if (massion_owner[tid] != -1) {
-				active_workers++;
-                while (tiles[massion_owner[tid]].try_pop(mission)) {
-                    tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
-                        mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
-                        mission.w1_step_vx_256, mission.w2_step_vx_256, mission.c_row, mission.dcdx_v_r, mission.dcdx_v_g, mission.dcdx_v_b,
-                        mission.z_row, mission.dzdx_v_r,
-                        mission.n_row, mission.dndx_v_x, mission.dndx_v_y, mission.dndx_v_z, mission.w0_stepx_v, mission.w1_stepx_v, mission.w2_stepx_v,
-                        mission.dcdx_block_vr, mission.dcdx_block_vg, mission.dcdx_block_vb, mission.dzdx_block_v,
-                        mission.dndx_block_vx, mission.dndx_block_vy, mission.dndx_block_vz,
-                        mission.w0_stepy, mission.w1_stepy, mission.w2_stepy, mission.dzdy, mission.dcdy, mission.dndy,
-                        mission.ka, mission.kd, mission.light);
-				}
-                massion_owner[tid] = -1;
-                active_workers--;
-            }
+        {
+			
+            //now_tile.wait(-1);
+
+        
+            
+            
+				
+                if (!massion_owner[tid].empty()){
+                    active_workers++;
+                    while (tiles[massion_owner[tid].back()].try_pop(mission)) {
+                        tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
+                            mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
+                            mission.w1_step_vx_256, mission.w2_step_vx_256, mission.c_row, mission.dcdx_v_r, mission.dcdx_v_g, mission.dcdx_v_b,
+                            mission.z_row, mission.dzdx_v_r,
+                            mission.n_row, mission.dndx_v_x, mission.dndx_v_y, mission.dndx_v_z, mission.w0_stepx_v, mission.w1_stepx_v, mission.w2_stepx_v,
+                            mission.dcdx_block_vr, mission.dcdx_block_vg, mission.dcdx_block_vb, mission.dzdx_block_v,
+                            mission.dndx_block_vx, mission.dndx_block_vy, mission.dndx_block_vz,
+                            mission.w0_stepy, mission.w1_stepy, mission.w2_stepy, mission.dzdy, mission.dcdy, mission.dndy,
+                            mission.ka, mission.kd, mission.light);
+                    }
+                    active_workers--;
+
+                    
+                        massion_owner[tid].pop_back();
+                    if (massion_owner[tid].empty()) {
+                        std::lock_guard<std::mutex> lock(mtx);
+                        now_tile = 0;
+                        now_tile.wait(0);
+                    }
+                }
+               
+				
+               
+               
+               
+				
+              
+            
                             
 			
 		}
