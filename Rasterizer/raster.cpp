@@ -15,6 +15,7 @@
 #include "RNG.h"
 #include "light.h"
 #include "triangle.h"
+#include "MultilThreadControl.h"
 
 // Main rendering function that processes a mesh, transforms its vertices, applies lighting, and draws triangles on the canvas.
 // Input Variables:
@@ -22,7 +23,7 @@
 // - mesh: Pointer to the Mesh object containing vertices and triangles to render.
 // - camera: Matrix representing the camera's transformation.
 // - L: Light object representing the lighting parameters.
-void render(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L) {
+void render(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L,MultilThreadControl *scv= nullptr,int tilenumber=8) {
     // Combine perspective, camera, and world transformations for the mesh
     matrix p = renderer.perspective * camera * mesh->world;
 
@@ -60,7 +61,7 @@ void render(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L) {
 
         // Create a triangle object and render it
         triangle tri(t[0], t[1], t[2]);
-        tri.draw(renderer, L, mesh->ka, mesh->kd);
+        tri.draw(renderer, L, mesh->ka, mesh->kd, scv, tilenumber);
     }
 }
 
@@ -194,7 +195,7 @@ void scene1() {
 // Scene with a grid of cubes and a moving sphere
 // No input variables
 void scene2() {
-    Renderer renderer;
+    Renderer *renderer=new Renderer();
     matrix camera = matrix::makeIdentity();
     Light L{ vec4(0.f, 1.f, 1.f, 0.f), colour(1.0f, 1.0f, 1.0f), colour(0.2f, 0.2f, 0.2f) };
 
@@ -230,10 +231,11 @@ void scene2() {
     int cycle = 0;
 
     bool running = true;
+    
     //bool show = 0;
     while (running) {
-        renderer.canvas.checkInput();
-        renderer.clear();
+        renderer->canvas.checkInput();
+        renderer->clear();
 
         // Rotate each cube in the grid
         for (unsigned int i = 0; i < rotations.size(); i++)
@@ -251,11 +253,11 @@ void scene2() {
             }
         }
 
-        if (renderer.canvas.keyPressed(VK_ESCAPE)) break;
+        if (renderer->canvas.keyPressed(VK_ESCAPE)) break;
 
         for (auto& m : scene)
-            render(renderer, m, camera, L);
-        renderer.present();
+            render(*renderer, m, camera, L);
+        renderer->present();
     }
 
     for (auto& m : scene)
@@ -330,13 +332,113 @@ void scene3() {
     for (auto& m : scene)
         delete m;
 }
+
+
+
+
+void multil_scene3() {
+    Renderer renderer;
+    matrix camera = matrix::makeIdentity();
+    Light L{ vec4(0.f, 1.f, 1.f, 0.f), colour(1.0f, 1.0f, 1.0f), colour(0.2f, 0.2f, 0.2f) };
+
+    std::vector<Mesh*> scene;
+
+    struct rRot { float x; float y; float z; }; // Structure to store random rotation parameters
+    std::vector<rRot> rotations;
+
+    RandomNumberGenerator& rng = RandomNumberGenerator::getInstance();
+
+    // Create a grid of cubes with random rotations
+    for (unsigned int y = 0; y < 6; y++) {
+        for (unsigned int x = 0; x < 8; x++) {
+            Mesh* m = new Mesh();
+            *m = Mesh::makeCube(1.f);
+            scene.push_back(m);
+            m->world = matrix::makeTranslation(-7.0f + (static_cast<float>(x) * 2.f), 5.0f - (static_cast<float>(y) * 2.f), -8.f);
+            rRot r{ rng.getRandomFloat(-.1f, .1f), rng.getRandomFloat(-.1f, .1f), rng.getRandomFloat(-.1f, .1f) };
+            r = { -0.5f,0.5f,0.5f };
+            rotations.push_back(r);
+        }
+    }
+
+    // Create a sphere and add it to the scene
+    Mesh* sphere = new Mesh();
+    *sphere = Mesh::makeSphere(1.0f, 10, 20);
+    scene.push_back(sphere);
+    float sphereOffset = -6.f;
+    float sphereStep = 0.1f;
+    sphere->world = matrix::makeTranslation(sphereOffset, 0.f, -6.f);
+
+    auto start = std::chrono::high_resolution_clock::now();
+    std::chrono::time_point<std::chrono::high_resolution_clock> end;
+    int cycle = 0;
+
+    bool running = true;
+	MultilThreadControl *scv = new MultilThreadControl();
+    scv->start();
+	int tilenumber = 8;
+    //bool show = 0;
+    while (running) {
+        scv->massion_downe = false;
+		scv->produce_done = false;
+        renderer.canvas.checkInput();
+        renderer.clear();
+
+        // Rotate each cube in the grid
+        for (unsigned int i = 0; i < rotations.size(); i++)
+            scene[i]->world = scene[i]->world * matrix::makeRotateXYZ(rotations[i].x, rotations[i].y, rotations[i].z);
+
+        // Move the sphere back and forth
+        sphereOffset += sphereStep;
+        sphere->world = matrix::makeTranslation(sphereOffset, 0.f, -6.f);
+        if (sphereOffset > 6.0f || sphereOffset < -6.0f) {
+            sphereStep *= -1.f;
+            if (++cycle % 2 == 0) {
+                end = std::chrono::high_resolution_clock::now();
+                std::cout << cycle / 2 << " :" << std::chrono::duration<double, std::milli>(end - start).count() << "ms\n";
+                start = std::chrono::high_resolution_clock::now();
+            }
+        }
+
+        if (renderer.canvas.keyPressed(VK_ESCAPE)) break;
+		scv->setTileCount(tilenumber);
+        //scv->tiles.reserve(tilenumber);
+		//scv->tiles.resize(tilenumber);
+        for (int i = 0; i < tilenumber; i++) {
+			//scv->tiles.push_back(SPSCQueue());
+            scv->tiles[i].head.store(0, std::memory_order_relaxed);
+            scv->tiles[i].tail.store(0, std::memory_order_relaxed);
+            scv->tiles[i].owner.store(-1, std::memory_order_relaxed);
+			scv->numThreads = 8;
+        }
+        for (auto& m : scene)
+            render(renderer, m, camera, L,scv,tilenumber);
+
+        scv->produce_done = true;
+        while (!scv->massion_downe) {
+            int scsccc = 1;
+			//scv->tiles.clear();
+        }
+      
+            renderer.present();
+          
+	
+    }
+
+    for (auto& m : scene)
+        delete m;
+}
+
+
+
 // Entry point of the application
 // No input variables
 int main() {
     // Uncomment the desired scene function to run
     //scene1();
     //scene2();
-     scene3();
+     //scene3();
+	multil_scene3();
     //sceneTest(); 
     
 

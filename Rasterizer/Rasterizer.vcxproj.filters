@@ -18,6 +18,9 @@
     <ClCompile Include="raster.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MultilThreadControl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GamesEngineeringBase.h">
@@ -48,6 +51,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="light.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MultilThreadControl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

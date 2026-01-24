@@ -1,12 +1,9 @@
 #pragma once
 
+
 #include "mesh.h"
-#include "colour.h"
-#include "renderer.h"
-#include "light.h"
-#include <iostream>
-#include <algorithm>
-#include <cmath>
+#include "MultilThreadControl.h"
+
 
 // Simple support class for a 2D vector
 class vec2D {
@@ -113,7 +110,7 @@ public:
     // - renderer: Renderer object for drawing
     // - L: Light object for shading calculations
     // - ka, kd: Ambient and diffuse lighting coefficients
-    void draw(Renderer& renderer, Light& L, float ka, float kd) {
+    void draw(Renderer& renderer, Light& L, float ka, float kd,MultilThreadControl* scv=nullptr,int tilenumber=8) {
 
 
         if (area < 1.f) return;
@@ -260,7 +257,87 @@ public:
 		__m256 one = _mm256_set1_ps(1.0f);
         __m256 zeor_dot_oneoneone = _mm256_set1_ps(0.001f);
 		__m256 twofivefive = _mm256_set1_ps(255.0f);
+        int miny, maxy;
+        int row_space = H / tilenumber;
+		int row_remainder = H % tilenumber;
+		TileWork work;
+        // ---- 关键：把“行起始值”按 ydifferent 偏移到 tile 的第一行 ----
+        work.row_w0 = row_w0;
+        work.row_w1 = row_w1;
+        work.row_w2 = row_w2;
 
+        work.z_row = z_row;
+        work.c_row = c_row;
+        work.n_row = n_row;
+
+        // ---- x 方向步进向量/块步进向量（不随 y 变）----
+        work.w0_step_vx_256 = w0_step_vx_256;
+        work.w1_step_vx_256 = w1_step_vx_256;
+        work.w2_step_vx_256 = w2_step_vx_256;
+
+        work.w0_stepx_v = w0_stepx_v;
+        work.w1_stepx_v = w1_stepx_v;
+        work.w2_stepx_v = w2_stepx_v;
+
+        work.dcdx_v_r = dcdx_v_r;
+        work.dcdx_v_g = dcdx_v_g;
+        work.dcdx_v_b = dcdx_v_b;
+
+        work.dcdx_block_vr = dcdx_block_vr;
+        work.dcdx_block_vg = dcdx_block_vg;
+        work.dcdx_block_vb = dcdx_block_vb;
+
+        work.dzdx_v_r = dzdx_v_r;
+        work.dzdx_block_v = dzdx_block_v;
+
+        work.dndx_v_x = dndx_v_x;
+        work.dndx_v_y = dndx_v_y;
+        work.dndx_v_z = dndx_v_z;
+
+        work.dndx_block_vx = dndx_block_vx;
+        work.dndx_block_vy = dndx_block_vy;
+        work.dndx_block_vz = dndx_block_vz;
+
+        // ---- y 方向标量步进（用于每行更新）----
+        work.w0_stepy = w0_stepy;
+        work.w1_stepy = w1_stepy;
+        work.w2_stepy = w2_stepy;
+
+        work.dzdy = dzdy;
+        work.dcdy = dcdy;
+        work.dndy = dndy;
+
+        work.ka = ka;
+        work.kd = kd;
+        work.renderer = &renderer;
+        work.light = L;
+
+        for (int i = 0; i < tilenumber; i++) {
+			int tile_minY = i * row_space;
+			int tile_maxY = (i + 1) * row_space;
+			if (i == tilenumber - 1) 
+				tile_maxY += row_remainder;
+            if(tile_maxY <=minY || tile_minY >= maxY)
+				continue;
+
+
+
+			miny = std::max(minY, tile_minY);
+			maxy = std::min(maxY, tile_maxY);
+			int ydifferent = miny - minY;
+            work.minX = std::max(minX,0);
+            work.maxX = std::min(maxX,1024);
+            work.minY = std::max(miny, 0);;
+            work.maxY = std::min(maxy, 768);;
+			work.renderer = &renderer;
+            work.ydifferent = ydifferent;
+            scv->tiles[i].try_push(work);
+
+           
+        }
+
+
+        /*
         for (int y = minY; y <= maxY; ++y) {
            
             __m256 w0_vec = _mm256_set1_ps(row_w0);
@@ -326,60 +403,7 @@ public:
                    // nor = nor + dndx * 8;
                     continue;
                 }
-                /*
-                {
-                    //colour c = col + dcdx * i;
-
-                    //c.clampColour();
-
-                    col_v_r = _mm256_min_ps(col_v_r, one);
-                    //vec4 normal = nor + dndx * i;
-                   
-                   // normal.normalise();
-                    __m256 normal_length = _mm256_sqrt_ps(_mm256_add_ps(_mm256_add_ps(_mm256_mul_ps(normal_v_x, normal_v_x),_mm256_mul_ps(normal_v_y, normal_v_y)),_mm256_mul_ps(normal_v_z, normal_v_z)));
-                    normal_v_x = _mm256_div_ps(normal_v_x, normal_length);
-                    normal_v_y = _mm256_div_ps(normal_v_y, normal_length);
-                    normal_v_z = _mm256_div_ps(normal_v_z, normal_length); 
-                   // float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
-					__m256 dot_v = _mm256_max_ps(_mm256_add_ps(_mm256_add_ps(_mm256_mul_ps(normal_v_x, light_omega_vx), _mm256_mul_ps(normal_v_y, light_omega_vy)), _mm256_mul_ps(normal_v_z, light_omega_vz)), zero);
-                    
-                   // colour a = (c * kd) * (L.L * dot) + (L.ambient * ka);
-                    __m256 a_vr = _mm256_add_ps(_mm256_mul_ps(_mm256_mul_ps(col_v_r, light_kd), _mm256_mul_ps(light_l_vr, dot_v)), _mm256_mul_ps(light_ambient_vr, light_ka));
-                    __m256 a_vg = _mm256_add_ps(_mm256_mul_ps(_mm256_mul_ps(col_v_g, light_kd), _mm256_mul_ps(light_l_vg, dot_v)), _mm256_mul_ps(light_ambient_vg, light_ka));
-                    __m256 a_vb = _mm256_add_ps(_mm256_mul_ps(_mm256_mul_ps(col_v_b, light_kd), _mm256_mul_ps(light_l_vb, dot_v)), _mm256_mul_ps(light_ambient_vb, light_ka));
-
-
-                    alignas(32) float a_r[8];
-                    alignas(32) float a_g[8];
-                    alignas(32) float a_b[8];
-                    _mm256_store_ps(a_r, a_vr);
-                    _mm256_store_ps(a_g, a_vg);
-                    _mm256_store_ps(a_b, a_vb);
-                    //extract the depth data from the SIMD register
-                    alignas(32) float depth_8f[8];
-                    _mm256_store_ps(depth_8f, depth_v);
-                    unsigned char r, g, b;
-                    float depth_end;
-                    //可以考虑顺序使用八个r,八个g,八个b
-                    for(int i=0;i<8;i++)
-                    {
-						r = a_r[i] * 255;
-						g = a_g[i] * 255;
-                        b = a_b[i] * 255;
-                        depth_end = depth_8f[i];
-                       
-                            renderer.canvas.draw(x + i, y, r, g, b);
-                            renderer.zbuffer(x + i, y) = depth_end;
-                          
-						
-					}
-                    
-
-                    
-                   
-                   
-                }
-               */
+               
 				__m256 zbuffer_v = _mm256_loadu_ps(&renderer.zbuffer(x, y));
                 __m256 m0_depth = _mm256_cmp_ps(depth_v, zeor_dot_oneoneone, _CMP_GE_OQ);
                 __m256 m1_depth = _mm256_cmp_ps(zbuffer_v, depth_v, _CMP_GE_OQ);
@@ -436,33 +460,7 @@ public:
 
                                 int realmask = _mm256_movemask_ps(_mm256_and_ps(inside, inside_depth));
 
-                                /*
-                                alignas(32) float a_r[8];
-                                alignas(32) float a_g[8];
-                                alignas(32) float a_b[8];
-                                _mm256_store_ps(a_r, a_vr);
-                                _mm256_store_ps(a_g, a_vg);
-                                _mm256_store_ps(a_b, a_vb);
-                                //extract the depth data from the SIMD register
-                                alignas(32) float depth_8f[8];
-                                _mm256_store_ps(depth_8f, depth_v);
-                                unsigned char r, g, b;
-                                float depth_end;
-                                //可以考虑顺序使用八个r,八个g,八个b
-
-                                while (realmask) {
-                                    int i = _tzcnt_u32(realmask);
-                                    realmask &= (realmask - 1);
-                                    r = a_r[i] * 255;
-                                    g = a_g[i] * 255;
-                                    b = a_b[i] * 255;
-                                    depth_end = depth_8f[i];
-
-                                    renderer.canvas.draw(x + i, y, r, g, b);
-                                    renderer.zbuffer(x + i, y) = depth_end;
-
-
-                                }*/
+                              
                                 
                                 if (realmask == 0xFF) {
 
@@ -625,104 +623,78 @@ public:
             z_row += dzdy;
             c_row = c_row + dcdy;
             n_row = n_row + dndy;
-        }
+        }*/
     }
-    auto EdgeFunction(float xa, float ya, float xb, float yb, float x, float y) {
-        return (x - xa) * (yb - ya) - (y - ya) * (xb - xa);
-    }
-   
 
-    void draw_with_depth_vector(Renderer& renderer, Light& L, float ka, float kd) {//not good
-
-
-        if (area < 1.f) return;
-
-
-
-        float invArea = 1.0f / area;
-
-
-        int W = renderer.canvas.getWidth();
-        int H = renderer.canvas.getHeight();
-
-        vec2D minV, maxV;
-        getBoundsWindow(renderer.canvas, minV, maxV);
-
-        int minX = clamp((int)std::floor(minV.x), 0, W - 1);
-        int minY = clamp((int)std::floor(minV.y), 0, H - 1);
-        int maxX = clamp((int)std::ceil(maxV.x), 0, W - 1);
-        int maxY = clamp((int)std::ceil(maxV.y), 0, H - 1);
-
-
-        float dzdx, dzdy;
-        compute_incremental_interpolate(v[0].p.x, v[1].p.x, v[0].p.y, v[1].p.y, v[2].p.x, v[2].p.y, v[0].p.z, v[1].p.z, v[2].p.z, invArea, dzdx, dzdy);
-        colour dcdx, dcdy;
-        compute_incremental_interpolate(v[0].p.x, v[1].p.x, v[0].p.y, v[1].p.y, v[2].p.x, v[2].p.y, v[0].rgb, v[1].rgb, v[2].rgb, invArea, dcdx, dcdy);
-        vec4 dndx, dndy;
-        compute_incremental_interpolate(v[0].p.x, v[1].p.x, v[0].p.y, v[1].p.y, v[2].p.x, v[2].p.y, v[0].normal, v[1].normal, v[2].normal, invArea, dndx, dndy);
-
-        vec4 e0 = makeEdge(v[1].p, v[2].p); // (A,B,C)
-        vec4 e1 = makeEdge(v[2].p, v[0].p);
-        vec4 e2 = makeEdge(v[0].p, v[1].p);
-
-        float startX = (float)minX;
-        float startY = (float)minY;
-
-        float row_w0 = evalEdge(e0, startX, startY);
-        float row_w1 = evalEdge(e1, startX, startY);
-        float row_w2 = evalEdge(e2, startX, startY);
-
-        float w0_stepx = e0.x, w0_stepy = e0.y;
-        float w1_stepx = e1.x, w1_stepy = e1.y;
-        float w2_stepx = e2.x, w2_stepy = e2.y;
-        float w0_block = e0.x * 8;
-        float w1_block = e1.x * 8;
-        float w2_block = e2.x * 8;
-
-        float alpha, beta, gamma;
-        float alpha0 = row_w0 * invArea;
-        float beta0 = row_w1 * invArea;
-        float gamma0 = row_w2 * invArea;
-        //std::cout << "asdasdds"<< alpha0+ beta0 + gamma0 <<std::endl;
-        float z_row = v[0].p.z * alpha0 + v[1].p.z * beta0 + v[2].p.z * gamma0;
-        colour c_row = v[0].rgb * alpha0 + v[1].rgb * beta0 + v[2].rgb * gamma0;
-        vec4 n_row = v[0].normal * alpha0 + v[1].normal * beta0 + v[2].normal * gamma0;
-
-
-
-        L.omega_i.normalise(); // 只做一次
-
-        alignas(32) float depth_first[8] = { z_row + dzdx * 0, z_row + dzdx * 1 , z_row + dzdx * 2 , z_row + dzdx * 3 , z_row + dzdx * 4 , z_row + dzdx * 5 , z_row + dzdx * 6 , z_row + dzdx * 7 };
-        __m256 z_orw_v = _mm256_load_ps(depth_first);
-        __m256 depth_blockX_v = _mm256_set1_ps(dzdx * 8);
-        __m256 depth_stepY_v = _mm256_set1_ps(dzdy);
-        __m256 depth_realuse_v = z_orw_v;
-
+    void tile_draw(Renderer& renderer,int minX,int maxX,int minY,int maxY,int ydifferent, float row_w0,float row_w1,float row_w2,__m256 w0_step_vx_256
+    , __m256 w1_step_vx_256,__m256 w2_step_vx_256,colour c_row, __m256 dcdx_v_r, __m256 dcdx_v_g, __m256 dcdx_v_b,float z_row,__m256 dzdx_v_r,
+        vec4 n_row,__m256 dndx_v_x, __m256 dndx_v_y, __m256 dndx_v_z,  __m256 w0_stepx_v, __m256 w1_stepx_v, __m256 w2_stepx_v,
+        __m256 dcdx_block_vr, __m256 dcdx_block_vg, __m256 dcdx_block_vb,__m256 dzdx_block_v,__m256 dndx_block_vx, __m256 dndx_block_vy, __m256 dndx_block_vz,
+        float w0_stepy,float w1_stepy,float w2_stepy,float dzdy,float dcdy,float dndy,float ka,float kd,  Light L)
+    {
+        __m256 one = _mm256_set1_ps(1.0f);
+        __m256 zeor_dot_oneoneone = _mm256_set1_ps(0.001f);
+        __m256 twofivefive = _mm256_set1_ps(255.0f);
         __m256 zero = _mm256_setzero_ps();
-        alignas(32)float w0[8] = { row_w0 ,row_w0 + w0_stepx * 1,row_w0 + w0_stepx * 2,row_w0 + w0_stepx * 3,row_w0 + w0_stepx * 4,row_w0 + w0_stepx * 5,row_w0 + w0_stepx * 6,row_w0 + w0_stepx * 7 };
-        alignas(32)float w1[8] = { row_w1 ,row_w1 + w1_stepx * 1,row_w1 + w1_stepx * 2,row_w1 + w1_stepx * 3,row_w1 + w1_stepx * 4,row_w1 + w1_stepx * 5,row_w1 + w1_stepx * 6,row_w1 + w1_stepx * 7 };
-        alignas(32) float w2[8] = { row_w2 ,row_w2 + w2_stepx * 1,row_w2 + w2_stepx * 2,row_w2 + w2_stepx * 3,row_w2 + w2_stepx * 4,row_w2 + w2_stepx * 5,row_w2 + w2_stepx * 6,row_w2 + w2_stepx * 7 };
+
+        __m256 light_omega_vx = _mm256_set1_ps(L.omega_i.x);
+        __m256 light_omega_vy = _mm256_set1_ps(L.omega_i.y);
+        __m256 light_omega_vz = _mm256_set1_ps(L.omega_i.z);
+
+        __m256 light_l_vr = _mm256_set1_ps(L.L.r);
+        __m256 light_l_vg = _mm256_set1_ps(L.L.g);
+        __m256 light_l_vb = _mm256_set1_ps(L.L.b);
+
+        __m256 light_ambient_vr = _mm256_set1_ps(L.ambient.r);
+        __m256 light_ambient_vg = _mm256_set1_ps(L.ambient.g);
+        __m256 light_ambient_vb = _mm256_set1_ps(L.ambient.b);
+
+        __m256 light_ka = _mm256_set1_ps(ka);
+        __m256 light_kd = _mm256_set1_ps(kd);
 
 
-
+        row_w0 += w0_stepy* ydifferent;
+        row_w1 += w1_stepy * ydifferent;
+        row_w2 += w2_stepy * ydifferent;
+        z_row += dzdy * ydifferent;
+        c_row = c_row + dcdy * ydifferent;
+        n_row = n_row + dndy * ydifferent;
+        // To be implemented: tile-based rasterization
         for (int y = minY; y <= maxY; ++y) {
-            for (int i = 0; i < 8; i++) {
-                w0[i] = row_w0 + w0_stepx * i;
-                w1[i] = row_w1 + w1_stepx * i;
-                w2[i] = row_w2 + w2_stepx * i;
-            }
 
-            __m256 w0_vec = _mm256_load_ps(w0);
-            __m256 w1_vec = _mm256_load_ps(w1);
-            __m256 w2_vec = _mm256_load_ps(w2);
-            __m256 w0_stepx_v = _mm256_set1_ps(w0_block);
-            __m256 w1_stepx_v = _mm256_set1_ps(w1_block);
-            __m256 w2_stepx_v = _mm256_set1_ps(w2_block);
+            __m256 w0_vec = _mm256_set1_ps(row_w0);
+            __m256 w1_vec = _mm256_set1_ps(row_w1);
+            __m256 w2_vec = _mm256_set1_ps(row_w2);
+            w0_vec = _mm256_add_ps(w0_vec, w0_step_vx_256);
+            w1_vec = _mm256_add_ps(w1_vec, w1_step_vx_256);
+            w2_vec = _mm256_add_ps(w2_vec, w2_step_vx_256);
 
-            depth_realuse_v = z_orw_v;
-            colour col = c_row;
-            //float z = z_row;
-            vec4 nor = n_row;
+            //color
+            __m256 col_v_r = _mm256_set1_ps(c_row.r);
+            __m256 col_v_g = _mm256_set1_ps(c_row.g);
+            __m256 col_v_b = _mm256_set1_ps(c_row.b);
+
+            col_v_r = _mm256_add_ps(col_v_r, dcdx_v_r);
+            col_v_g = _mm256_add_ps(col_v_g, dcdx_v_g);
+            col_v_b = _mm256_add_ps(col_v_b, dcdx_v_b);
+            //depth
+            __m256 depth_v = _mm256_set1_ps(z_row);
+            depth_v = _mm256_add_ps(depth_v, dzdx_v_r);
+
+            //normal
+            __m256 normal_v_x = _mm256_set1_ps(n_row.x);
+            __m256 normal_v_y = _mm256_set1_ps(n_row.y);
+            __m256 normal_v_z = _mm256_set1_ps(n_row.z);
+
+            normal_v_x = _mm256_add_ps(normal_v_x, dndx_v_x);
+            normal_v_y = _mm256_add_ps(normal_v_y, dndx_v_y);
+            normal_v_z = _mm256_add_ps(normal_v_z, dndx_v_z);
+
+
+            //colour col = c_row;
+
+           // float z = z_row;
+            //vec4 nor = n_row;
 
             for (int x = minX; x <= maxX; x += 8) {
 
@@ -736,97 +708,259 @@ public:
                     w0_vec = _mm256_add_ps(w0_vec, w0_stepx_v);
                     w1_vec = _mm256_add_ps(w1_vec, w1_stepx_v);
                     w2_vec = _mm256_add_ps(w2_vec, w2_stepx_v);
-                    depth_realuse_v = _mm256_add_ps(depth_realuse_v, depth_blockX_v);
+                    //++dcdx
+                    col_v_r = _mm256_add_ps(col_v_r, dcdx_block_vr);
+                    col_v_g = _mm256_add_ps(col_v_g, dcdx_block_vg);
+                    col_v_b = _mm256_add_ps(col_v_b, dcdx_block_vb);
+                    //++dzdx
+                    depth_v = _mm256_add_ps(depth_v, dzdx_block_v);
+                    //++dndx
+                    normal_v_x = _mm256_add_ps(normal_v_x, dndx_block_vx);
+                    normal_v_y = _mm256_add_ps(normal_v_y, dndx_block_vy);
+                    normal_v_z = _mm256_add_ps(normal_v_z, dndx_block_vz);
+
+
                     // z += dzdx * 8;
-                    col = col + dcdx * 8;
-                    nor = nor + dndx * 8;
+                     //col = col + dcdx * 8;
+                    // nor = nor + dndx * 8;
                     continue;
                 }
+               
+                __m256 zbuffer_v = _mm256_loadu_ps(&renderer.zbuffer(x, y));
+                __m256 m0_depth = _mm256_cmp_ps(depth_v, zeor_dot_oneoneone, _CMP_GE_OQ);
+                __m256 m1_depth = _mm256_cmp_ps(zbuffer_v, depth_v, _CMP_GE_OQ);
+                __m256 inside_depth = _mm256_and_ps(m0_depth, m1_depth);
+                int mask_depth = _mm256_movemask_ps(inside_depth);
 
-                __m256 depth_cmp = _mm256_cmp_ps(_mm256_load_ps(&renderer.zbuffer(x, y)), depth_realuse_v, _CMP_GT_OQ);
-                int depth_mask = _mm256_movemask_ps(depth_cmp);
-                if (depth_mask == 0) {
+                if (mask_depth == 0) {
                     w0_vec = _mm256_add_ps(w0_vec, w0_stepx_v);
                     w1_vec = _mm256_add_ps(w1_vec, w1_stepx_v);
                     w2_vec = _mm256_add_ps(w2_vec, w2_stepx_v);
-                    depth_realuse_v = _mm256_add_ps(depth_realuse_v, depth_blockX_v);
+                    //++dcdx
+                    col_v_r = _mm256_add_ps(col_v_r, dcdx_block_vr);
+                    col_v_g = _mm256_add_ps(col_v_g, dcdx_block_vg);
+                    col_v_b = _mm256_add_ps(col_v_b, dcdx_block_vb);
+                    //++dzdx
+                    depth_v = _mm256_add_ps(depth_v, dzdx_block_v);
+                    //++dndx
+                    normal_v_x = _mm256_add_ps(normal_v_x, dndx_block_vx);
+                    normal_v_y = _mm256_add_ps(normal_v_y, dndx_block_vy);
+                    normal_v_z = _mm256_add_ps(normal_v_z, dndx_block_vz);
+
+
                     // z += dzdx * 8;
-                    col = col + dcdx * 8;
-                    nor = nor + dndx * 8;
+                     //col = col + dcdx * 8;
+                    // nor = nor + dndx * 8;
                     continue;
                 }
-                float z[8];
-                _mm256_store_ps(z, depth_realuse_v);
-                while (mask) {
-                    int i = _tzcnt_u32(mask);
-                    mask &= (mask - 1);
 
 
 
 
 
+                {
+                    //colour c = col + dcdx * i;
 
-                    float depth = z[i];
+                    //c.clampColour();
+
+                    col_v_r = _mm256_min_ps(col_v_r, one);
+                    //vec4 normal = nor + dndx * i;
+
+                   // normal.normalise();
+                    __m256 normal_length = _mm256_sqrt_ps(_mm256_add_ps(_mm256_add_ps(_mm256_mul_ps(normal_v_x, normal_v_x), _mm256_mul_ps(normal_v_y, normal_v_y)), _mm256_mul_ps(normal_v_z, normal_v_z)));
+                    normal_v_x = _mm256_div_ps(normal_v_x, normal_length);
+                    normal_v_y = _mm256_div_ps(normal_v_y, normal_length);
+                    normal_v_z = _mm256_div_ps(normal_v_z, normal_length);
+                    // float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
+                    __m256 dot_v = _mm256_max_ps(_mm256_add_ps(_mm256_add_ps(_mm256_mul_ps(normal_v_x, light_omega_vx), _mm256_mul_ps(normal_v_y, light_omega_vy)), _mm256_mul_ps(normal_v_z, light_omega_vz)), zero);
+
+                    // colour a = (c * kd) * (L.L * dot) + (L.ambient * ka);
+                    __m256 a_vr = _mm256_add_ps(_mm256_mul_ps(_mm256_mul_ps(col_v_r, light_kd), _mm256_mul_ps(light_l_vr, dot_v)), _mm256_mul_ps(light_ambient_vr, light_ka));
+                    __m256 a_vg = _mm256_add_ps(_mm256_mul_ps(_mm256_mul_ps(col_v_g, light_kd), _mm256_mul_ps(light_l_vg, dot_v)), _mm256_mul_ps(light_ambient_vg, light_ka));
+                    __m256 a_vb = _mm256_add_ps(_mm256_mul_ps(_mm256_mul_ps(col_v_b, light_kd), _mm256_mul_ps(light_l_vb, dot_v)), _mm256_mul_ps(light_ambient_vb, light_ka));
 
 
-                    // if (renderer.zbuffer(x+i, y) > depth && depth > 0.001f) {
+                    int realmask = _mm256_movemask_ps(_mm256_and_ps(inside, inside_depth));
 
-                    colour c = col + dcdx * i;
-                    c.clampColour();
-                    vec4 normal = nor + dndx * i;
-                    normal.normalise();
-                    float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
-                    colour a = (c * kd) * (L.L * dot) + (L.ambient * ka);
-                    unsigned char r, g, b;
-                    a.toRGB(r, g, b);
-                    renderer.canvas.draw(x + i, y, r, g, b);
-                    renderer.zbuffer(x + i, y) = depth;
-                    // }
+
+
+                    if (realmask == 0xFF) {
+
+
+                        alignas(32) float a_r[8];
+                        alignas(32) float a_g[8];
+                        alignas(32) float a_b[8];
+
+                        a_vr = _mm256_mul_ps(twofivefive, a_vr);
+                        a_vg = _mm256_mul_ps(twofivefive, a_vg);
+                        a_vb = _mm256_mul_ps(twofivefive, a_vb);
+
+
+                        _mm256_store_ps(a_r, a_vr);
+                        _mm256_store_ps(a_g, a_vg);
+                        _mm256_store_ps(a_b, a_vb);
+
+
+                        renderer.canvas.draw(x, y, a_r, a_g, a_b);
+
+                        _mm256_store_ps(&renderer.zbuffer(x, y), depth_v);
+
+                    }
+                    else {
+
+                        alignas(32) float a_r[8];
+                        alignas(32) float a_g[8];
+                        alignas(32) float a_b[8];
+                        a_vr = _mm256_mul_ps(twofivefive, a_vr);
+                        a_vg = _mm256_mul_ps(twofivefive, a_vg);
+                        a_vb = _mm256_mul_ps(twofivefive, a_vb);
+                        _mm256_store_ps(a_r, a_vr);
+                        _mm256_store_ps(a_g, a_vg);
+                        _mm256_store_ps(a_b, a_vb);
+                        //extract the depth data from the SIMD register
+                        alignas(32) float depth_8f[8];
+                        _mm256_store_ps(depth_8f, depth_v);
+                        unsigned char r, g, b;
+                        float depth_end;
+                        //可以考虑顺序使用八个r,八个g,八个b
+
+                        while (realmask) {
+                            int i = _tzcnt_u32(realmask);
+                            realmask &= (realmask - 1);
+                            r = a_r[i];
+                            g = a_g[i];
+                            b = a_b[i];
+                            depth_end = depth_8f[i];
+
+                            renderer.canvas.draw(x + i, y, r, g, b);
+                            renderer.zbuffer(x + i, y) = depth_end;
+
+
+                        }
+                    }
+
+
+
+
+
 
                 }
+
+
+
                 w0_vec = _mm256_add_ps(w0_vec, w0_stepx_v);
                 w1_vec = _mm256_add_ps(w1_vec, w1_stepx_v);
                 w2_vec = _mm256_add_ps(w2_vec, w2_stepx_v);
-                depth_realuse_v = _mm256_add_ps(depth_realuse_v, depth_blockX_v);
-                col = col + dcdx * 8;
-                nor = nor + dndx * 8;
+
+                //++dcdx
+                col_v_r = _mm256_add_ps(col_v_r, dcdx_block_vr);
+                col_v_g = _mm256_add_ps(col_v_g, dcdx_block_vg);
+                col_v_b = _mm256_add_ps(col_v_b, dcdx_block_vb);
+                //++dzdx
+                depth_v = _mm256_add_ps(depth_v, dzdx_block_v);
+                //++dndx
+                normal_v_x = _mm256_add_ps(normal_v_x, dndx_block_vx);
+                normal_v_y = _mm256_add_ps(normal_v_y, dndx_block_vy);
+                normal_v_z = _mm256_add_ps(normal_v_z, dndx_block_vz);
+                // z += dzdx * 8;
+                // col = col + dcdx * 8;
+                // nor = nor + dndx * 8;
 
                 if (maxX - x < 8) {
-                    _mm256_store_ps(w0, w0_vec);
-                    _mm256_store_ps(w1, w1_vec);
-                    _mm256_store_ps(w2, w2_vec);
-                    for (int i = 0; i <= maxX - x; i++) {
-                        if (w0[i] >= 0 && w1[i] >= 0 && w2[i] >= 0) {
-                            float depth = z[i];
-
-
-                            if (renderer.zbuffer(x + i, y) > depth && depth > 0.001f) {
-
-                                colour c = col + dcdx * i;
-                                c.clampColour();
-                                vec4 normal = nor + dndx * i;
-                                normal.normalise();
-                                float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
-                                colour a = (c * kd) * (L.L * dot) + (L.ambient * ka);
-                                unsigned char r, g, b;
-                                a.toRGB(r, g, b);
-                                renderer.canvas.draw(x + i, y, r, g, b);
-                                renderer.zbuffer(x + i, y) = depth;
-                            }
-                        }
+                    __m256 m0 = _mm256_cmp_ps(w0_vec, zero, _CMP_GE_OQ);
+                    __m256 m1 = _mm256_cmp_ps(w1_vec, zero, _CMP_GE_OQ);
+                    __m256 m2 = _mm256_cmp_ps(w2_vec, zero, _CMP_GE_OQ);
+                    __m256 inside = _mm256_and_ps(_mm256_and_ps(m0, m1), m2);
+                    int mask = _mm256_movemask_ps(inside);
+                    if (mask == 0) {
+                        break;
                     }
+
+                    __m256 zbuffer_v = _mm256_loadu_ps(&renderer.zbuffer(x, y));
+                    __m256 m0_depth = _mm256_cmp_ps(depth_v, zeor_dot_oneoneone, _CMP_GE_OQ);
+                    __m256 m1_depth = _mm256_cmp_ps(zbuffer_v, depth_v, _CMP_GE_OQ);
+                    __m256 inside_depth = _mm256_and_ps(m0_depth, m1_depth);
+                    int mask_depth = _mm256_movemask_ps(inside_depth);
+
+                    if (mask_depth == 0) {
+                        break;
+                    }
+
+                    int realmask = _mm256_movemask_ps(_mm256_and_ps(inside, inside_depth));
+
+
+
+
+                    col_v_r = _mm256_min_ps(col_v_r, one);
+
+                    __m256 normal_length = _mm256_sqrt_ps(_mm256_add_ps(_mm256_add_ps(_mm256_mul_ps(normal_v_x, normal_v_x), _mm256_mul_ps(normal_v_y, normal_v_y)), _mm256_mul_ps(normal_v_z, normal_v_z)));
+                    normal_v_x = _mm256_div_ps(normal_v_x, normal_length);
+                    normal_v_y = _mm256_div_ps(normal_v_y, normal_length);
+                    normal_v_z = _mm256_div_ps(normal_v_z, normal_length);
+
+                    __m256 dot_v = _mm256_max_ps(_mm256_add_ps(_mm256_add_ps(_mm256_mul_ps(normal_v_x, light_omega_vx), _mm256_mul_ps(normal_v_y, light_omega_vy)), _mm256_mul_ps(normal_v_z, light_omega_vz)), zero);
+
+
+                    __m256 a_vr = _mm256_add_ps(_mm256_mul_ps(_mm256_mul_ps(col_v_r, light_kd), _mm256_mul_ps(light_l_vr, dot_v)), _mm256_mul_ps(light_ambient_vr, light_ka));
+                    __m256 a_vg = _mm256_add_ps(_mm256_mul_ps(_mm256_mul_ps(col_v_g, light_kd), _mm256_mul_ps(light_l_vg, dot_v)), _mm256_mul_ps(light_ambient_vg, light_ka));
+                    __m256 a_vb = _mm256_add_ps(_mm256_mul_ps(_mm256_mul_ps(col_v_b, light_kd), _mm256_mul_ps(light_l_vb, dot_v)), _mm256_mul_ps(light_ambient_vb, light_ka));
+
+
+                    alignas(32) float a_r[8];
+                    alignas(32) float a_g[8];
+                    alignas(32) float a_b[8];
+                    _mm256_store_ps(a_r, a_vr);
+                    _mm256_store_ps(a_g, a_vg);
+                    _mm256_store_ps(a_b, a_vb);
+
+                    alignas(32) float depth_8f[8];
+                    _mm256_store_ps(depth_8f, depth_v);
+                    unsigned char r, g, b;
+                    float depth_end;
+
+                    for (int i = 0; i < maxX - x; i++) {
+
+                        r = a_r[i] * 255;
+                        g = a_g[i] * 255;
+                        b = a_b[i] * 255;
+                        depth_end = depth_8f[i];
+
+                        renderer.canvas.draw(x + i, y, r, g, b);
+                        renderer.zbuffer(x + i, y) = depth_end;
+
+
+                    }
+
+
+
+
+
+
                     break;
 
                 }
 
             }
             row_w0 += w0_stepy; row_w1 += w1_stepy; row_w2 += w2_stepy;
-            z_orw_v = _mm256_add_ps(z_orw_v, depth_stepY_v);
-            //z_row += dzdy;
+            z_row += dzdy;
             c_row = c_row + dcdy;
             n_row = n_row + dndy;
         }
+	}
+
+
+
+
+
+
+
+
+    auto EdgeFunction(float xa, float ya, float xb, float yb, float x, float y) {
+        return (x - xa) * (yb - ya) - (y - ya) * (xb - xa);
     }
+   
+
+   
     // Compute the 2D bounds of the triangle
     // Output Variables:
     // - minV, maxV: Minimum and maximum bounds in 2D space

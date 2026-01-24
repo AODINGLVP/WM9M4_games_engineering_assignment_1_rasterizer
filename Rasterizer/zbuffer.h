@@ -1,5 +1,5 @@
 #pragma once
-
+#include <cassert>
 #include <concepts>
 
 // Zbuffer class for managing depth values during rendering.
@@ -43,6 +43,9 @@ public:
     // - y: Y-coordinate of the pixel.
     // Returns a reference to the depth value at (x, y).
     T& operator () (unsigned int x, unsigned int y) {
+        assert(buffer != nullptr);
+        assert(x < width);
+        assert(y < height);
         return buffer[(y * width) + x]; // Convert 2D coordinates to 1D index
     }
 
