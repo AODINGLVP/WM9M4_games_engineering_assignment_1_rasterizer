@@ -81,8 +81,9 @@ class MultilThreadControl
 {
 	public:
 		std::mutex empty_check_mtx;
-        std::atomic<bool> massion_downe = false;
+       
 		std::atomic<int>active_workers=0;
+        std::map<int,int>massion_owner;
        // A* a = new A[size];
 		SPSCQueue* tiles = new SPSCQueue[32];
         //vector<SPSCQueue> tiles;
@@ -100,9 +101,11 @@ class MultilThreadControl
 		scv.reserve(n);
 		for (int i = 0; i < n; i++)
 		{
+			massion_owner[i] = -1;
             scv.emplace_back(&MultilThreadControl::worker, this, i);
 			//scv[i] = std::jthread(&MultilThreadControl::worker, this, i);
 		}
+        
 	}
 	void setTileCount(int n) {
         tile_count = n;
@@ -114,51 +117,29 @@ private:
 	void worker(int tid) {
 		TileWork mission;
 		
-		int expected = -1;
+		
 		while (true)
 		{
-            while (massion_downe) {
-
-            }
-            bool should_end = true;
-				for (int i = 0; i<tile_count; i++) {
-                    expected = -1;
-                    if(produce_done){
-                        //std::lock_guard<std::mutex> lock(empty_check_mtx);
-                        if(tiles[i].taskQueue.empty())
-                        continue;
-                        else
-							should_end = false;
-					}
-					if (tiles[i].owner.compare_exchange_weak(expected, tid, std::memory_order_acq_rel)) {
-						active_workers++;
-
-						while(tiles[i].try_pop(mission))
-						{
-                            tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
-                                mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
-                                mission.w1_step_vx_256, mission.w2_step_vx_256, mission.c_row, mission.dcdx_v_r, mission.dcdx_v_g, mission.dcdx_v_b,
-                                mission.z_row, mission.dzdx_v_r,
-                                mission.n_row, mission.dndx_v_x, mission.dndx_v_y, mission.dndx_v_z, mission.w0_stepx_v, mission.w1_stepx_v, mission.w2_stepx_v,
-                                mission.dcdx_block_vr, mission.dcdx_block_vg, mission.dcdx_block_vb, mission.dzdx_block_v,
-                                mission.dndx_block_vx, mission.dndx_block_vy, mission.dndx_block_vz,
-                                mission.w0_stepy, mission.w1_stepy, mission.w2_stepy, mission.dzdy, mission.dcdy, mission.dndy,
-								mission.ka, mission.kd,mission.light);
-						}
-						tiles[i].is_empty = true;
-                        tiles[i].owner.store(-1, std::memory_order_release);
-						active_workers--;
-
-						
-					}
+           
+         
+            if (massion_owner[tid] != -1) {
+				active_workers++;
+                while (tiles[massion_owner[tid]].try_pop(mission)) {
+                    tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
+                        mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
+                        mission.w1_step_vx_256, mission.w2_step_vx_256, mission.c_row, mission.dcdx_v_r, mission.dcdx_v_g, mission.dcdx_v_b,
+                        mission.z_row, mission.dzdx_v_r,
+                        mission.n_row, mission.dndx_v_x, mission.dndx_v_y, mission.dndx_v_z, mission.w0_stepx_v, mission.w1_stepx_v, mission.w2_stepx_v,
+                        mission.dcdx_block_vr, mission.dcdx_block_vg, mission.dcdx_block_vb, mission.dzdx_block_v,
+                        mission.dndx_block_vx, mission.dndx_block_vy, mission.dndx_block_vz,
+                        mission.w0_stepy, mission.w1_stepy, mission.w2_stepy, mission.dzdy, mission.dcdy, mission.dndy,
+                        mission.ka, mission.kd, mission.light);
 				}
-                if (should_end) {
-                    if (active_workers == 0 && produce_done) {
-                        massion_downe = true;
-                    }
+                massion_owner[tid] = -1;
+                active_workers--;
             }
-            
-
+                            
+			
 		}
 	}
 
@@ -483,6 +464,9 @@ private:
             n_row = n_row + dndy;
         }
     }
+
+    
+
 
 
 

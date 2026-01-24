@@ -376,8 +376,9 @@ void multil_scene3() {
 
     bool running = true;
 	MultilThreadControl *scv = new MultilThreadControl();
-    scv->start(10);
+    scv->start(6);
 	int tilenumber = 16;
+    std::jthread for_produce;
     //bool show = 0;
     while (running) {
      
@@ -408,24 +409,46 @@ void multil_scene3() {
 			//scv->tiles.push_back(SPSCQueue());
 			scv->tiles[i].taskQueue = std::queue<TileWork>();
             scv->tiles[i].owner.store(-1, std::memory_order_relaxed);
-			scv->numThreads = 8;
+			scv->numThreads = 6;
         }
-        scv->massion_downe = false;
+      
         scv->produce_done = false;
-        for (auto& m : scene)
-            render(Renderer::instance(), m, camera, L,scv,tilenumber);
+        for (auto& m : scene) {
+            render(Renderer::instance(), m, camera, L, scv, tilenumber);
+            
+        }
 
         scv->produce_done = true;
+
         int tilessizenumber = 0;
-        for(int i=0;i<tilenumber;i++){
+        for (int i = 0; i < tilenumber; i++) {
 
             tilessizenumber += scv->tiles[i].taskQueue.size();
-		}
-		//cout << "tile size number:" << tilessizenumber << endl;
-        while (!scv->massion_downe) {
-            int scsccc = 1;
-			//scv->tiles.clear();
         }
+        //cout << "tile size number:" << tilessizenumber << endl;
+        while (1) {
+            for (int i = 0; i < tilenumber; i++) {
+                if (!scv->tiles[i].taskQueue.empty()) {
+                    for (int j = 0; j < scv->massion_owner.size(); j++) {
+                        if (scv->massion_owner[j] == -1) {
+                            scv->massion_owner[j] = i;
+
+                        }
+                    }
+                }
+
+            }
+			bool tiles_empty_count = true;
+            for(int i=0;i<tilenumber;i++){
+                if (!scv->tiles[i].taskQueue.empty()) {
+                    tiles_empty_count = false;
+                   
+                }
+			}
+			if (tiles_empty_count && scv->active_workers == 0) break;
+        }
+        
+     
       
         Renderer::instance().present();
           
