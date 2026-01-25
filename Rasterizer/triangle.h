@@ -828,12 +828,17 @@ public:
         int tile_minY;
         int tile_maxY;
         for (int i = 0; i < tilenumber; i++) {
-            int tile_minY = tile_splite[i];
-            int tile_maxY = tile_splite[i + 1]-1;
-			
-            if (i == tilenumber - 1) {
+            if (i == 0) {
+                 tile_minY = 0;
+                 tile_maxY = tile_splite[i + 1] - 8;
+            }else   if (i == tilenumber - 1) {
                 tile_maxY = 768;
             }
+            else {
+                 tile_minY = tile_splite[i] - 7;
+                 tile_maxY = tile_splite[i + 1] - 8;
+            }
+            
            
 			 
 			
@@ -846,9 +851,9 @@ public:
 			maxy = std::min(maxY, tile_maxY);
 			int ydifferent = miny - minY;
             work.minX = std::max(minX,0);
-            work.maxX = std::min(maxX,1024);
+            work.maxX = std::min(maxX,1023);
             work.minY = std::max(miny, 0);;
-            work.maxY = std::min(maxy, 768);;
+            work.maxY = std::min(maxy, 767);;
 			work.renderer = &Renderer::instance();
             work.ydifferent = ydifferent;
             scv->tiles[i].try_push(work);

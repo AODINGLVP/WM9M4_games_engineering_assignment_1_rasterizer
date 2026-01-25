@@ -382,7 +382,7 @@ private:
                             g = a_g[i];
                             b = a_b[i];
                             depth_end = depth_8f[i];
-
+                           
                             Renderer::instance().canvas.draw(x + i, y, r, g, b);
                             Renderer::instance().zbuffer(x + i, y) = depth_end;
 
@@ -475,7 +475,7 @@ private:
                         g = a_g[i] * 255;
                         b = a_b[i] * 255;
                         depth_end = depth_8f[i];
-
+                        
                         Renderer::instance().canvas.draw(x + i, y, r, g, b);
                         Renderer::instance().zbuffer(x + i, y) = depth_end;
 

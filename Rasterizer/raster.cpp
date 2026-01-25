@@ -660,7 +660,7 @@ void multil_scene2() {
 		}
 		auto end1 = std::chrono::high_resolution_clock::now();
 		fenfa_count_time += std::chrono::duration<double, std::milli>(end1 - star1).count();
-
+		scv->tiles;
 		
 		auto star2 = std::chrono::high_resolution_clock::now();
 		int tilessizenumber = 0;
