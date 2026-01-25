@@ -599,14 +599,18 @@ void multil_scene2() {
 
 		scv->produce_done = false;
 		scv->active_workers = all_number;
-		auto star3 = std::chrono::high_resolution_clock::now();
+		
 		Renderer::instance().canvas.checkInput();
-		Renderer::instance().clear();
-
+		Renderer::instance().canvas.clear();
+		auto star3 = std::chrono::high_resolution_clock::now();
+		//Renderer::instance().clear();
+		
+		Renderer::instance().zbuffer.clear();
+		auto end3 = std::chrono::high_resolution_clock::now();
 		// Rotate each cube in the grid
 		for (unsigned int i = 0; i < rotations.size(); i++)
 			scene[i]->world = scene[i]->world * matrix::makeRotateXYZ(rotations[i].x, rotations[i].y, rotations[i].z);
-
+		
 		// Move the sphere back and forth
 		sphereOffset += sphereStep;
 		sphere->world = matrix::makeTranslation(sphereOffset, 0.f, -6.f);
@@ -646,7 +650,7 @@ void multil_scene2() {
 		}
 
 
-		auto end3 = std::chrono::high_resolution_clock::now();
+		
 		qianqian_time += std::chrono::duration<double, std::milli>(end3 - star3).count();
 
 		auto star1 = std::chrono::high_resolution_clock::now();
@@ -727,8 +731,8 @@ int main() {
 	//scene1();
 	//scene2();
 	 //scene3();
-	multil_scene1();
-	//multil_scene2();
+	//multil_scene1();
+	multil_scene2();
 	//sceneTest(); 
 
 

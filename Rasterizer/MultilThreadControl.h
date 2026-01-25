@@ -57,7 +57,7 @@ public:
 
     bool try_push(const TileWork& v) {
         is_empty = false;
-        std::lock_guard<std::mutex> lock(mtx);
+       // std::lock_guard<std::mutex> lock(mtx);
         taskQueue.push(v);
         return true;
     }
@@ -65,7 +65,7 @@ public:
    
 
     bool try_pop(TileWork& out) {
-        std::lock_guard<std::mutex> lock(mtx);
+       // std::lock_guard<std::mutex> lock(mtx);
         if (taskQueue.empty()) {
             return false; // Queue is empty
 		}
@@ -132,11 +132,16 @@ private:
             if (!produce_done) {
                 continue;
             } 
-            
+            //bool clear_flag = true;
            
             if (massion_owner[tid] != -1) {
                 auto star2 = std::chrono::high_resolution_clock::now();
                 while (tiles[massion_owner[tid]].try_pop(mission)) {
+                    /*
+                    if (clear_flag) {
+                        clear_flag = false;
+                        Renderer::instance().zbuffer.tile_clear(mission.minX, mission.minY, mission.maxX, mission.maxY);
+                    }*/
                     tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
                         mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
                         mission.w1_step_vx_256, mission.w2_step_vx_256, mission.c_row, mission.dcdx_v_r, mission.dcdx_v_g, mission.dcdx_v_b,
