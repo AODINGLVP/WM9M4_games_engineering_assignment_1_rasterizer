@@ -87,6 +87,7 @@ class MultilThreadControl
 		std::atomic<bool> one_done = false;
 		std::atomic<int>active_workers=0;
         std::map<int,int>massion_owner;
+        
        // A* a = new A[size];
 		SPSCQueue* tiles = new SPSCQueue[32];
         //vector<SPSCQueue> tiles;
@@ -133,7 +134,8 @@ private:
                 continue;
             } 
             //bool clear_flag = true;
-           
+            tiles[massion_owner[tid]].try_pop(mission);
+            Renderer::instance().zbuffer.tile_clear(mission.minY, mission.maxY);
             if (massion_owner[tid] != -1) {
                 auto star2 = std::chrono::high_resolution_clock::now();
                 while (tiles[massion_owner[tid]].try_pop(mission)) {

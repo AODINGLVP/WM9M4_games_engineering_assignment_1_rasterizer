@@ -60,10 +60,10 @@ public:
 			//buffer[i] = T(1.0); // Reset each depth value
 		}
 	}
-	void tile_clear(unsigned int minx, unsigned int miny, unsigned int maxx, unsigned int maxy) {
+	void tile_clear( unsigned int miny,  unsigned int maxy) {
 		__m256 onef = _mm256_set1_ps(1.f);
 		int scvmin = 1024 * miny;
-		int scvmax = 1024 * maxy;
+		int scvmax = 1024 * maxy+1024;
 
 		int tail = (scvmax - scvmin) % 8;
 		unsigned int i = scvmin;

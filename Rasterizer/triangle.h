@@ -832,6 +832,7 @@ public:
                  tile_minY = 0;
                  tile_maxY = tile_splite[i + 1] - 8;
             }else   if (i == tilenumber - 1) {
+                tile_minY = tile_splite[i] - 7;
                 tile_maxY = 768;
             }
             else {

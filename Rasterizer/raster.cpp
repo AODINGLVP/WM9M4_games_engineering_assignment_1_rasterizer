@@ -605,7 +605,7 @@ void multil_scene2() {
 		auto star3 = std::chrono::high_resolution_clock::now();
 		//Renderer::instance().clear();
 		
-		Renderer::instance().zbuffer.clear();
+		//Renderer::instance().zbuffer.clear();
 		auto end3 = std::chrono::high_resolution_clock::now();
 		// Rotate each cube in the grid
 		for (unsigned int i = 0; i < rotations.size(); i++)
@@ -644,7 +644,7 @@ void multil_scene2() {
 
 		for (int i = 0; i < all_number; i++) {
 			//scv->tiles.push_back(SPSCQueue());
-			scv->tiles[i].taskQueue = std::queue<TileWork>();
+			//scv->tiles[i].taskQueue = std::queue<TileWork>();
 
 			scv->numThreads = all_number;
 		}
@@ -711,7 +711,28 @@ void multil_scene2() {
 				tile_splite[all_number-1] -= 20;
 			}
 		}
+		TileWork clear_work;
+		for (int i = 0; i < all_number; i++) {
+			int tile_minY;
+			int tile_maxY;
+			
+			if (i == 0) {
+				tile_minY = 0;
+				tile_maxY = tile_splite[i + 1] - 8;
+			}
+			else   if (i == all_number - 1) {
+				tile_minY = tile_splite[i] - 7;
+				tile_maxY = 767;
+			}
+			else {
+				tile_minY = tile_splite[i] - 7;
+				tile_maxY = tile_splite[i + 1] - 8;
+			}
+			clear_work.minY = tile_minY;
+			clear_work.maxY = tile_maxY;
+			scv->tiles[i].try_push(clear_work);
 
+		}
 		auto end2 = std::chrono::high_resolution_clock::now();
 		chule_count_time += std::chrono::duration<double, std::milli>(end2 - star2).count();
 
