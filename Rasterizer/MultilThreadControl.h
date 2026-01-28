@@ -13,6 +13,7 @@
 struct alignas(64) TileFlag {
 	std::atomic<bool> free;
 };
+//struct for data in every single tile
 struct alignas(32) TileWork {
     Renderer* renderer;
     Light light;
@@ -47,17 +48,12 @@ struct alignas(32) TileWork {
 
 class SPSCQueue {
 public:
-	int sizeN = 1024;
-	std::atomic<int> owner = -1;
+	
+	//task queue for one tile
     std::queue<TileWork> taskQueue;
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool stop = false;
-	std::atomic<bool> is_empty = true;
-
+ 
     bool try_push(const TileWork& v) {
-        is_empty = false;
-       // std::lock_guard<std::mutex> lock(mtx);
+       
         taskQueue.push(v);
         return true;
     }
@@ -65,9 +61,9 @@ public:
    
 
     bool try_pop(TileWork& out) {
-       // std::lock_guard<std::mutex> lock(mtx);
+     ;
         if (taskQueue.empty()) {
-            return false; // Queue is empty
+            return false; // Queue is empty,work end 
 		}
         out = taskQueue.front();
         taskQueue.pop();
@@ -88,7 +84,7 @@ class MultilThreadControl
 		std::atomic<int>active_workers=0;
         std::map<int,int>massion_owner;
         
-       // A* a = new A[size];
+       
 		SPSCQueue* tiles = new SPSCQueue[32];
         //vector<SPSCQueue> tiles;
         //SPSCQueue tiles[32];
@@ -108,14 +104,15 @@ class MultilThreadControl
 		for (int i = 0; i < n; i++)
 		{
 			massion_owner[i] = -1;
-            tile_draw_number.emplace_back(0.f);
+            tile_draw_number.emplace_back(0.f); // Records each worker thread's per-frame execution time
             scv.emplace_back(&MultilThreadControl::worker, this, i);
-			//scv[i] = std::jthread(&MultilThreadControl::worker, this, i);
+			
 		}
         
 	}
   
 	void setTileCount(int n) {
+        // Sets the number of screen tiles
         tile_count = n;
 	}
 	
@@ -129,23 +126,21 @@ private:
 		while (true)
 		{
             int my_epoch = stop_flag.load(std::memory_order_acquire);
+            // Wait for the main thread to signal the start of a new frame 
             stop_flag.wait(my_epoch);
-            if (!produce_done) {
-                continue;
-            } 
-            auto star2 = std::chrono::high_resolution_clock::now();
-            //bool clear_flag = true;
+
+           
+            auto star2 = std::chrono::high_resolution_clock::now();//count time
+            // The first dequeued item is used to obtain the tile's minY/maxY range for clearing buffers
             tiles[massion_owner[tid]].try_pop(mission);
             Renderer::instance().zbuffer.tile_clear(mission.minY, mission.maxY);
             Renderer::instance().canvas.tile_clear(mission.minY, mission.maxY);
+
             if (massion_owner[tid] != -1) {
-                
+                // Consume and rasterize all tasks for the tile owned by this thread
                 while (tiles[massion_owner[tid]].try_pop(mission)) {
-                    /*
-                    if (clear_flag) {
-                        clear_flag = false;
-                        Renderer::instance().zbuffer.tile_clear(mission.minX, mission.minY, mission.maxX, mission.maxY);
-                    }*/
+                    // Renderer has been refactored into a global singleton.
+                    // The pointer will still be passed, but in fact it is no longer being used. I just too lazy to change it.
                     tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
                         mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
                         mission.w1_step_vx_256, mission.w2_step_vx_256, mission.c_row, mission.dcdx_v_r, mission.dcdx_v_g, mission.dcdx_v_b,
@@ -157,14 +152,16 @@ private:
                         mission.ka, mission.kd, mission.light);
                     
 				}
-                auto end2 = std::chrono::high_resolution_clock::now();
+                auto end2 = std::chrono::high_resolution_clock::now();// End timing
                 tile_draw_number[tid] = std::chrono::duration<double, std::milli>(end2 - star2).count();
                 {
-					//tex.lock();
+					
                     
                     massion_owner[tid] = -1;
+                    // active_workers is an atomic counter:
+                    // when active_workers reaches 0, it means all worker threads have finished this frame
                     active_workers--;
-					//bool stop_check = stop;
+					
                   
 
                    

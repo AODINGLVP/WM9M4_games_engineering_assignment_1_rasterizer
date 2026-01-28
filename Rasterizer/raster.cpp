@@ -44,7 +44,8 @@ void render(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L) {
 
 
 		//back-face culling
-		if (vec4::dot(mesh->world * mesh->vertices[ind.v[0]].normal, mesh->world * mesh->vertices[ind.v[0]].p - vec4(0.0f, 0.0f, -camera.a[11], 1.0f)) >= 0.0f) continue;
+		if (vec4::dot(mesh->world * mesh->vertices[ind.v[0]].normal, mesh->world * mesh->vertices[ind.v[0]].p - vec4(0.0f, 0.0f, -camera.a[11], 1.0f)) >= 0.0f)
+			continue;
 
 
 
@@ -85,7 +86,8 @@ void render_multiple(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L, s
 
 
 		//back-face culling
-		if (vec4::dot(mesh->world * mesh->vertices[ind.v[0]].normal, mesh->world * mesh->vertices[ind.v[0]].p - vec4(0.0f, 0.0f, -camera.a[11], 1.0f)) >= 0.0f) continue;
+		if (vec4::dot(mesh->world * mesh->vertices[ind.v[0]].normal, mesh->world * mesh->vertices[ind.v[0]].p - vec4(0.0f, 0.0f, -camera.a[11], 1.0f)) >= 0.0f)
+			continue;
 
 
 
@@ -572,7 +574,9 @@ void multil_scene1() {
 		int rightnumber = 0;
 		double total_time = 0;
 
-
+		// Dynamically adjust tile boundaries
+		// The first tile row
+		// tile_draw_number stores the execution time of each thread
 		if (scv->tile_draw_number[0] < scv->tile_draw_number[1]) {
 			if (tile_splite[1] + 20 < tile_splite[2]) {
 				tile_splite[1] += 20;
@@ -590,12 +594,14 @@ void multil_scene1() {
 				}
 			}
 		}
+		// The last tile row
 		if (scv->tile_draw_number[all_number - 1] < scv->tile_draw_number[all_number - 2]) {
 			if (tile_splite[all_number - 1] - 20 > tile_splite[all_number - 2]) {
 				tile_splite[all_number - 1] -= 20;
 			}
 		}
 
+		// Push the updated tile ranges into the task queues
 		for (int i = 0; i < all_number; i++) {
 			int tile_minY;
 			int tile_maxY;
@@ -1095,8 +1101,8 @@ int main() {
 	//scene2();
 	 //scene3();
 	//multil_scene1();
-	//multil_scene2();
-	 multil_scene3();
+	multil_scene2();
+	 //multil_scene3();
 	//sceneTest(); 
 
 

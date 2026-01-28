@@ -70,7 +70,7 @@ public:
                 ret.a[1 * 4 + col] = _mm_cvtss_f32(_mm_dp_ps(rowVec2, colVec, 0xF1));
 				ret.a[2 * 4 + col] = _mm_cvtss_f32(_mm_dp_ps(rowVec3, colVec, 0xF1));
                 ret.a[3 * 4 + col] = _mm_cvtss_f32(_mm_dp_ps(rowVec4, colVec, 0xF1));
-                    //a[row * 4 + 0] * mx.a[0 * 4 + col] +a[row * 4 + 1] * mx.a[1 * 4 + col] + a[row * 4 + 2] * mx.a[2 * 4 + col] +a[row * 4 + 3] * mx.a[3 * 4 + col];
+                    
             }
         
         return ret;
