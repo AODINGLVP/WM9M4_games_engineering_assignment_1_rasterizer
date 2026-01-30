@@ -1098,10 +1098,10 @@ int main() {
 	// Uncomment the desired scene function to run
 	
 	//scene1();
-	scene2();
+	//scene2();
 	 //scene3();
 	//multil_scene1();
-	//multil_scene2();
+	multil_scene2();
 	 //multil_scene3();
 	//sceneTest(); 
 

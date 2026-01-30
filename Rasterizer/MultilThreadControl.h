@@ -122,19 +122,21 @@ private:
 	void worker(int tid) {
 		TileWork mission;
 		
-		
+        int my_epoch = 0;
 		while (true)
 		{
-            int my_epoch = stop_flag.load(std::memory_order_acquire);
+            //int my_epoch = stop_flag.load(std::memory_order_acquire);
             // Wait for the main thread to signal the start of a new frame 
             stop_flag.wait(my_epoch);
-
+            my_epoch = stop_flag.load(std::memory_order_acquire);
            
             auto star2 = std::chrono::high_resolution_clock::now();//count time
             // The first dequeued item is used to obtain the tile's minY/maxY range for clearing buffers
-            tiles[massion_owner[tid]].try_pop(mission);
-            Renderer::instance().zbuffer.tile_clear(mission.minY, mission.maxY);
-            Renderer::instance().canvas.tile_clear(mission.minY, mission.maxY);
+            if (tiles[massion_owner[tid]].try_pop(mission)) {
+                Renderer::instance().zbuffer.tile_clear(mission.minY, mission.maxY);
+                Renderer::instance().canvas.tile_clear(mission.minY, mission.maxY);
+            }
+          
 
             if (massion_owner[tid] != -1) {
                 // Consume and rasterize all tasks for the tile owned by this thread
