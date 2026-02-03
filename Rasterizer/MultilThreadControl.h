@@ -101,9 +101,9 @@ class MultilThreadControl
         numThreads=n;
 		scv.reserve(n);
         tile_draw_number.reserve(n);
-		for (int i = 0; i < n; i++)
+		for (int i =1; i < n; i++)
 		{
-			massion_owner[i] = -1;
+			massion_owner[i] = i;
             tile_draw_number.emplace_back(0.f); // Records each worker thread's per-frame execution time
             scv.emplace_back(&MultilThreadControl::worker, this, i);
 			
@@ -116,68 +116,7 @@ class MultilThreadControl
         tile_count = n;
 	}
 	
-	
-
-private:
-	void worker(int tid) {
-		TileWork mission;
-		
-        int my_epoch = 0;
-		while (true)
-		{
-            //int my_epoch = stop_flag.load(std::memory_order_acquire);
-            // Wait for the main thread to signal the start of a new frame 
-            stop_flag.wait(my_epoch);
-            my_epoch = stop_flag.load(std::memory_order_acquire);
-           
-            auto star2 = std::chrono::high_resolution_clock::now();//count time
-            // The first dequeued item is used to obtain the tile's minY/maxY range for clearing buffers
-            if (tiles[massion_owner[tid]].try_pop(mission)) {
-                Renderer::instance().zbuffer.tile_clear(mission.minY, mission.maxY);
-                Renderer::instance().canvas.tile_clear(mission.minY, mission.maxY);
-            }
-          
-
-            if (massion_owner[tid] != -1) {
-                // Consume and rasterize all tasks for the tile owned by this thread
-                while (tiles[massion_owner[tid]].try_pop(mission)) {
-                    // Renderer has been refactored into a global singleton.
-                    // The pointer will still be passed, but in fact it is no longer being used. I just too lazy to change it.
-                    tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
-                        mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
-                        mission.w1_step_vx_256, mission.w2_step_vx_256, mission.c_row, mission.dcdx_v_r, mission.dcdx_v_g, mission.dcdx_v_b,
-                        mission.z_row, mission.dzdx_v_r,
-                        mission.n_row, mission.dndx_v_x, mission.dndx_v_y, mission.dndx_v_z, mission.w0_stepx_v, mission.w1_stepx_v, mission.w2_stepx_v,
-                        mission.dcdx_block_vr, mission.dcdx_block_vg, mission.dcdx_block_vb, mission.dzdx_block_v,
-                        mission.dndx_block_vx, mission.dndx_block_vy, mission.dndx_block_vz,
-                        mission.w0_stepy, mission.w1_stepy, mission.w2_stepy, mission.dzdy, mission.dcdy, mission.dndy,
-                        mission.ka, mission.kd, mission.light);
-                    
-				}
-                auto end2 = std::chrono::high_resolution_clock::now();// End timing
-                tile_draw_number[tid] = std::chrono::duration<double, std::milli>(end2 - star2).count();
-                {
-					
-                    
-                    massion_owner[tid] = -1;
-                    // active_workers is an atomic counter:
-                    // when active_workers reaches 0, it means all worker threads have finished this frame
-                    active_workers--;
-					
-                  
-
-                   
-                }
-				
-            }
-                            
-			
-		}
-	}
-
-
-
-    inline void tile_draw(Renderer &renderer, int minX, int maxX, int minY, int maxY, int ydifferent, float row_w0, float row_w1, float row_w2, __m256 w0_step_vx_256
+    inline void tile_draw(Renderer& renderer, int minX, int maxX, int minY, int maxY, int ydifferent, float row_w0, float row_w1, float row_w2, __m256 w0_step_vx_256
         , __m256 w1_step_vx_256, __m256 w2_step_vx_256, colour c_row, __m256 dcdx_v_r, __m256 dcdx_v_g, __m256 dcdx_v_b, float z_row, __m256 dzdx_v_r,
         vec4 n_row, __m256 dndx_v_x, __m256 dndx_v_y, __m256 dndx_v_z, __m256 w0_stepx_v, __m256 w1_stepx_v, __m256 w2_stepx_v,
         __m256 dcdx_block_vr, __m256 dcdx_block_vg, __m256 dcdx_block_vb, __m256 dzdx_block_v, __m256 dndx_block_vx, __m256 dndx_block_vy, __m256 dndx_block_vz,
@@ -385,7 +324,7 @@ private:
                             g = a_g[i];
                             b = a_b[i];
                             depth_end = depth_8f[i];
-                           
+
                             Renderer::instance().canvas.draw(x + i, y, r, g, b);
                             Renderer::instance().zbuffer(x + i, y) = depth_end;
 
@@ -478,7 +417,7 @@ private:
                         g = a_g[i] * 255;
                         b = a_b[i] * 255;
                         depth_end = depth_8f[i];
-                        
+
                         Renderer::instance().canvas.draw(x + i, y, r, g, b);
                         Renderer::instance().zbuffer(x + i, y) = depth_end;
 
@@ -496,8 +435,68 @@ private:
             n_row = n_row + dndy;
         }
     }
+	
 
-    
+private:
+	void worker(int tid) {
+		TileWork mission;
+		
+        int my_epoch = 0;
+		while (true)
+		{
+            //int my_epoch = stop_flag.load(std::memory_order_acquire);
+            // Wait for the main thread to signal the start of a new frame 
+            stop_flag.wait(my_epoch);
+            my_epoch = stop_flag.load(std::memory_order_acquire);
+           
+            auto star2 = std::chrono::high_resolution_clock::now();//count time
+            // The first dequeued item is used to obtain the tile's minY/maxY range for clearing buffers
+            if (tiles[tid].try_pop(mission)) {
+                Renderer::instance().zbuffer.tile_clear(mission.minY, mission.maxY);
+                Renderer::instance().canvas.tile_clear(mission.minY, mission.maxY);
+            }
+          
+
+            
+                // Consume and rasterize all tasks for the tile owned by this thread
+                while (tiles[tid].try_pop(mission)) {
+                    // Renderer has been refactored into a global singleton.
+                    // The pointer will still be passed, but in fact it is no longer being used. I just too lazy to change it.
+                    tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
+                        mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
+                        mission.w1_step_vx_256, mission.w2_step_vx_256, mission.c_row, mission.dcdx_v_r, mission.dcdx_v_g, mission.dcdx_v_b,
+                        mission.z_row, mission.dzdx_v_r,
+                        mission.n_row, mission.dndx_v_x, mission.dndx_v_y, mission.dndx_v_z, mission.w0_stepx_v, mission.w1_stepx_v, mission.w2_stepx_v,
+                        mission.dcdx_block_vr, mission.dcdx_block_vg, mission.dcdx_block_vb, mission.dzdx_block_v,
+                        mission.dndx_block_vx, mission.dndx_block_vy, mission.dndx_block_vz,
+                        mission.w0_stepy, mission.w1_stepy, mission.w2_stepy, mission.dzdy, mission.dcdy, mission.dndy,
+                        mission.ka, mission.kd, mission.light);
+                    
+				}
+                auto end2 = std::chrono::high_resolution_clock::now();// End timing
+                tile_draw_number[tid] = std::chrono::duration<double, std::milli>(end2 - star2).count();
+                {
+					
+                    
+                  
+                    // active_workers is an atomic counter:
+                    // when active_workers reaches 0, it means all worker threads have finished this frame
+                    active_workers--;
+					
+                  
+
+                   
+                }
+				
+            
+                            
+			
+		}
+	}
+
+
+
+   
 
 
 

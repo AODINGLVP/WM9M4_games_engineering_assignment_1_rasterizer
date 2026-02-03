@@ -460,7 +460,7 @@ void multil_scene1() {
 	MultilThreadControl* scv = new MultilThreadControl();
 
 
-	
+
 	std::jthread for_produce;
 	double fenfa_count_time = 0.0;
 	double chule_count_time = 0.0;
@@ -495,6 +495,9 @@ void multil_scene1() {
 		scv->tiles[i].try_push(clear_work);
 
 	}
+	for (int i = 0; i < 10; i++) {
+		scv->massion_owner[i] = i;
+	}
 	while (running) {
 
 
@@ -522,7 +525,7 @@ void multil_scene1() {
 					<< "\n";
 				std::cout << cycle / 2 << " :" << std::chrono::duration<double, std::milli>(end - start).count() << "ms\n";
 				start = std::chrono::high_resolution_clock::now();
-			
+
 			}
 		}
 
@@ -545,16 +548,14 @@ void multil_scene1() {
 			render_multiple(Renderer::instance(), m, camera, L, tile_splite, scv, all_number);
 
 		}
-		
 
 
-	
+
+
 		int tilessizenumber = 0;
 
 
-		for (int i = 0; i < 10; i++) {
-			scv->massion_owner[i] = i;
-		}
+		
 		for (int i = 0; i < all_number; i++) {
 			scv->tile_draw_number[i] = 0;
 		}
@@ -562,6 +563,41 @@ void multil_scene1() {
 		scv->stop_flag = scv->stop_flag + 1;
 		scv->stop_flag.notify_all();
 
+		TileWork mission;
+		auto star2 = std::chrono::high_resolution_clock::now();//count time
+		// The first dequeued item is used to obtain the tile's minY/maxY range for clearing buffers
+		if (scv->tiles[0].try_pop(mission)) {
+			Renderer::instance().zbuffer.tile_clear(mission.minY, mission.maxY);
+			Renderer::instance().canvas.tile_clear(mission.minY, mission.maxY);
+		}
+
+
+
+		// Consume and rasterize all tasks for the tile owned by this thread
+		while (scv->tiles[0].try_pop(mission)) {
+			// Renderer has been refactored into a global singleton.
+			// The pointer will still be passed, but in fact it is no longer being used. I just too lazy to change it.
+			scv->tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
+				mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
+				mission.w1_step_vx_256, mission.w2_step_vx_256, mission.c_row, mission.dcdx_v_r, mission.dcdx_v_g, mission.dcdx_v_b,
+				mission.z_row, mission.dzdx_v_r,
+				mission.n_row, mission.dndx_v_x, mission.dndx_v_y, mission.dndx_v_z, mission.w0_stepx_v, mission.w1_stepx_v, mission.w2_stepx_v,
+				mission.dcdx_block_vr, mission.dcdx_block_vg, mission.dcdx_block_vb, mission.dzdx_block_v,
+				mission.dndx_block_vx, mission.dndx_block_vy, mission.dndx_block_vz,
+				mission.w0_stepy, mission.w1_stepy, mission.w2_stepy, mission.dzdy, mission.dcdy, mission.dndy,
+				mission.ka, mission.kd, mission.light);
+
+		}
+		auto end2 = std::chrono::high_resolution_clock::now();// End timing
+		scv->tile_draw_number[0] = std::chrono::duration<double, std::milli>(end2 - star2).count();
+		{
+
+			
+			// active_workers is an atomic counter:
+			// when active_workers reaches 0, it means all worker threads have finished this frame
+			scv->active_workers--;
+
+		}
 		while (1) {
 			if (scv->active_workers == 0) {
 				break;
@@ -623,7 +659,7 @@ void multil_scene1() {
 			scv->tiles[i].try_push(clear_work);
 
 		}
-		
+
 
 	}
 
@@ -678,7 +714,7 @@ void multil_scene2() {
 	MultilThreadControl* scv = new MultilThreadControl();
 
 
-	
+
 	std::jthread for_produce;
 	double fenfa_count_time = 0.0;
 	double chule_count_time = 0.0;
@@ -713,6 +749,10 @@ void multil_scene2() {
 		scv->tiles[i].try_push(clear_work);
 
 	}
+
+	for (int i = 0; i < 10; i++) {
+		scv->massion_owner[i] = i;
+	}
 	while (running) {
 
 
@@ -721,7 +761,7 @@ void multil_scene2() {
 		scv->active_workers = all_number;
 
 		Renderer::instance().canvas.checkInput();
-		
+
 		// Rotate each cube in the grid
 		for (unsigned int i = 0; i < rotations.size(); i++)
 			scene[i]->world = scene[i]->world * matrix::makeRotateXYZ(rotations[i].x, rotations[i].y, rotations[i].z);
@@ -740,7 +780,7 @@ void multil_scene2() {
 				std::cout << cycle / 2 << " :" << std::chrono::duration<double, std::milli>(end - start).count() << "ms\n";
 				start = std::chrono::high_resolution_clock::now();
 
-				
+
 			}
 		}
 
@@ -751,33 +791,68 @@ void multil_scene2() {
 
 		scv->setTileCount(all_number);
 
-	
-			scv->numThreads = all_number;
-		
+
+		scv->numThreads = all_number;
 
 
 
-	
-		
+
+
+
 		for (auto& m : scene) {
 			render_multiple(Renderer::instance(), m, camera, L, tile_splite, scv, all_number);
 
 		}
-	
 
-		
 
-		
+
+
+
 		int tilessizenumber = 0;
 
 
-		for (int i = 0; i < 10; i++) {
-			scv->massion_owner[i] = i;
-		}
 
 		scv->produce_done = true;
 		scv->stop_flag = scv->stop_flag + 1;
 		scv->stop_flag.notify_all();
+
+
+
+		TileWork mission;
+		auto star2 = std::chrono::high_resolution_clock::now();//count time
+		// The first dequeued item is used to obtain the tile's minY/maxY range for clearing buffers
+		if (scv->tiles[0].try_pop(mission)) {
+			Renderer::instance().zbuffer.tile_clear(mission.minY, mission.maxY);
+			Renderer::instance().canvas.tile_clear(mission.minY, mission.maxY);
+		}
+
+
+
+		// Consume and rasterize all tasks for the tile owned by this thread
+		while (scv->tiles[0].try_pop(mission)) {
+			// Renderer has been refactored into a global singleton.
+			// The pointer will still be passed, but in fact it is no longer being used. I just too lazy to change it.
+			scv->tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
+				mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
+				mission.w1_step_vx_256, mission.w2_step_vx_256, mission.c_row, mission.dcdx_v_r, mission.dcdx_v_g, mission.dcdx_v_b,
+				mission.z_row, mission.dzdx_v_r,
+				mission.n_row, mission.dndx_v_x, mission.dndx_v_y, mission.dndx_v_z, mission.w0_stepx_v, mission.w1_stepx_v, mission.w2_stepx_v,
+				mission.dcdx_block_vr, mission.dcdx_block_vg, mission.dcdx_block_vb, mission.dzdx_block_v,
+				mission.dndx_block_vx, mission.dndx_block_vy, mission.dndx_block_vz,
+				mission.w0_stepy, mission.w1_stepy, mission.w2_stepy, mission.dzdy, mission.dcdy, mission.dndy,
+				mission.ka, mission.kd, mission.light);
+
+		}
+		auto end2 = std::chrono::high_resolution_clock::now();// End timing
+		scv->tile_draw_number[0] = std::chrono::duration<double, std::milli>(end2 - star2).count();
+		{
+
+			
+			// active_workers is an atomic counter:
+			// when active_workers reaches 0, it means all worker threads have finished this frame
+			scv->active_workers--;
+
+		}
 
 		while (1) {
 			if (scv->active_workers == 0) {
@@ -836,7 +911,7 @@ void multil_scene2() {
 			scv->tiles[i].try_push(clear_work);
 
 		}
-		
+
 
 	}
 
@@ -849,7 +924,7 @@ void multil_scene3() {
 	std::string document;
 	document = document = "../test_result/frame_time_scene3_processer_amount" + std::to_string(all_number) + "_multiple.csv";;
 	std::ofstream perf_csv(document);
-	
+
 	perf_csv << "frame;ms\n";
 	vector<int>tile_splite;
 	Renderer::instance();
@@ -872,7 +947,7 @@ void multil_scene3() {
 			scene.push_back(m);
 			m->world = matrix::makeTranslation(-7.0f + (static_cast<float>(x) * 2.f), 6.0f - (static_cast<float>(y) * 2.f), -4.f);
 			rRot r = { -0.5f,0.5f,0.5f };
-			
+
 			rotations.push_back(r);
 		}
 	}
@@ -920,9 +995,9 @@ void multil_scene3() {
 	MultilThreadControl* scv = new MultilThreadControl();
 
 
-	
-	
-	
+
+
+
 	scv->start(all_number);
 
 	for (int i = 0; i < all_number; i++) {
@@ -952,6 +1027,9 @@ void multil_scene3() {
 		scv->tiles[i].try_push(clear_work);
 
 	}
+	for (int i = 0; i < 10; i++) {
+		scv->massion_owner[i] = i;
+	}
 	while (running) {
 
 
@@ -960,8 +1038,8 @@ void multil_scene3() {
 		scv->active_workers = all_number;
 
 		Renderer::instance().canvas.checkInput();
-		
-		
+
+
 		// Rotate each cube in the grid
 		camera = matrix::makeTranslation(0, 0, -zoffset); // Update camera position
 		for (unsigned int i = 0; i < rotations.size(); i++)
@@ -980,7 +1058,7 @@ void multil_scene3() {
 				std::cout << cycle / 2 << " :" << std::chrono::duration<double, std::milli>(end - start).count() << "ms\n";
 				start = std::chrono::high_resolution_clock::now();
 
-				
+
 			}
 		}
 
@@ -991,27 +1069,25 @@ void multil_scene3() {
 		zoffset += step;
 		scv->setTileCount(all_number);
 
-	
-
-			scv->numThreads = all_number;
-		
 
 
+		scv->numThreads = all_number;
 
-	
+
+
+
+
 		for (auto& m : scene) {
 			render_multiple(Renderer::instance(), m, camera, L, tile_splite, scv, all_number);
 
 		}
-		
 
-		
+
+
 		int tilessizenumber = 0;
 
 
-		for (int i = 0; i < 10; i++) {
-			scv->massion_owner[i] = i;
-		}
+		
 		for (int i = 0; i < all_number; i++) {
 			scv->tile_draw_number[i] = 0;
 		}
@@ -1019,6 +1095,39 @@ void multil_scene3() {
 		scv->stop_flag = scv->stop_flag + 1;
 		scv->stop_flag.notify_all();
 
+		TileWork mission;
+		auto star2 = std::chrono::high_resolution_clock::now();//count time
+		// The first dequeued item is used to obtain the tile's minY/maxY range for clearing buffers
+		if (scv->tiles[0].try_pop(mission)) {
+			Renderer::instance().zbuffer.tile_clear(mission.minY, mission.maxY);
+			Renderer::instance().canvas.tile_clear(mission.minY, mission.maxY);
+		}
+
+
+
+		// Consume and rasterize all tasks for the tile owned by this thread
+		while (scv->tiles[0].try_pop(mission)) {
+			// Renderer has been refactored into a global singleton.
+			// The pointer will still be passed, but in fact it is no longer being used. I just too lazy to change it.
+			scv->tile_draw(*mission.renderer, mission.minX, mission.maxX, mission.minY, mission.maxY, mission.ydifferent,
+				mission.row_w0, mission.row_w1, mission.row_w2, mission.w0_step_vx_256,
+				mission.w1_step_vx_256, mission.w2_step_vx_256, mission.c_row, mission.dcdx_v_r, mission.dcdx_v_g, mission.dcdx_v_b,
+				mission.z_row, mission.dzdx_v_r,
+				mission.n_row, mission.dndx_v_x, mission.dndx_v_y, mission.dndx_v_z, mission.w0_stepx_v, mission.w1_stepx_v, mission.w2_stepx_v,
+				mission.dcdx_block_vr, mission.dcdx_block_vg, mission.dcdx_block_vb, mission.dzdx_block_v,
+				mission.dndx_block_vx, mission.dndx_block_vy, mission.dndx_block_vz,
+				mission.w0_stepy, mission.w1_stepy, mission.w2_stepy, mission.dzdy, mission.dcdy, mission.dndy,
+				mission.ka, mission.kd, mission.light);
+
+		}
+		auto end2 = std::chrono::high_resolution_clock::now();// End timing
+		scv->tile_draw_number[0] = std::chrono::duration<double, std::milli>(end2 - star2).count();
+		{
+			// active_workers is an atomic counter:
+			// when active_workers reaches 0, it means all worker threads have finished this frame
+			scv->active_workers--;
+
+		}
 		while (1) {
 			if (scv->active_workers == 0) {
 				break;
@@ -1080,7 +1189,7 @@ void multil_scene3() {
 			scv->tiles[i].try_push(clear_work);
 
 		}
-		
+
 
 	}
 
@@ -1094,16 +1203,16 @@ void multil_scene3() {
 // Entry point of the application
 // No input variables
 int main() {
-	
+
 	// Uncomment the desired scene function to run
-	
+
 	//scene1();
 	//scene2();
 	 //scene3();
 	//multil_scene1();
-	multil_scene2();
-	 //multil_scene3();
-	//sceneTest(); 
+	//multil_scene2();
+	multil_scene3();
+   //sceneTest(); 
 
 
 	return 0;
