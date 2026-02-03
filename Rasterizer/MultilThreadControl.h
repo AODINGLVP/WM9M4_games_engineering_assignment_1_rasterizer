@@ -101,10 +101,13 @@ class MultilThreadControl
         numThreads=n;
 		scv.reserve(n);
         tile_draw_number.reserve(n);
+        for (int i = 0; i < n; i++) {
+            tile_draw_number.emplace_back(0.f); // Records each worker thread's per-frame execution time
+        }
 		for (int i =1; i < n; i++)
 		{
 			massion_owner[i] = i;
-            tile_draw_number.emplace_back(0.f); // Records each worker thread's per-frame execution time
+           
             scv.emplace_back(&MultilThreadControl::worker, this, i);
 			
 		}
